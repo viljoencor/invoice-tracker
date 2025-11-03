@@ -1,0 +1,30 @@
+# VCS / OS
+.git
+.gitignore
+.gitattributes
+.DS_Store
+Thumbs.db
+.idea
+.vscode
+
+# Node artifacts
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+.yarn/cache/
+.bun/
+
+# Nuxt / build output
+.nuxt/
+.output/
+dist/
+.cache/
+coverage/
+
+# Local env & logs
+.env
+.env.*
+npm-debug.log*
+yarn-error.log*
+*.log

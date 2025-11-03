@@ -1,0 +1,35 @@
+# VCS / OS
+.git
+.gitignore
+.gitattributes
+.DS_Store
+Thumbs.db
+.idea
+.vscode
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual envs
+.venv/
+venv/
+
+# Local env & logs
+.env
+.env.*
+*.log
+
+# Build artifacts (keep migrations!)
+dist/
+build/
+*.egg-info/
+
+# If you ever create coverage or reports locally
+.coverage
+htmlcov/
+reports/

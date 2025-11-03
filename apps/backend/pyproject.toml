@@ -1,0 +1,45 @@
+[project]
+name = "invoice-tracker-backend"
+version = "0.1.0"
+description = "FastAPI backend for Invoice Tracker"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "pydantic>=2.9.0",
+  "pydantic-settings>=2.5.2",
+  "SQLAlchemy>=2.0.36",
+  "asyncpg>=0.29.0",
+  "alembic>=1.13.2",
+  "argon2-cffi>=23.1.0",
+  "pyjwt[crypto]>=2.9.0",
+  "structlog>=24.1.0",
+  "python-multipart>=0.0.9",
+  "reportlab>=4.2.5",
+  "psycopg2-binary>=2.9.9",
+  "email-validator>=2.1.0"
+]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+# Tell Hatchling what to include in the wheel
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+# Use uv's new dependency groups (replaces tool.uv.dev-dependencies)
+[dependency-groups]
+dev = [
+  "pytest>=8.0.0",
+  "pytest-asyncio>=0.23.0",
+  "httpx>=0.27.0",
+  "ruff>=0.6.5",
+  "mypy>=1.11.0",
+]
+
+# Ruff config
+[tool.ruff]
+line-length = 100
+target-version = "py312"
