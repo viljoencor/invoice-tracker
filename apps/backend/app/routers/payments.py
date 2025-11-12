@@ -1,8 +1,7 @@
 import uuid
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from sqlalchemy import select, desc
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import async_session_maker
@@ -12,20 +11,21 @@ from ..security import get_current_claims
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
+
 async def get_db():
     async with async_session_maker() as s:
         yield s
+
 
 @router.post("")
 async def apply_payment(
     body: PaymentIn,
     claims=Depends(get_current_claims),
     db: AsyncSession = Depends(get_db),
-
     # Look for the standard header “Idempotency-Key” (case-insensitive).
     # Also accept lowercase “idempotency-key” just in case.
-    idemp_std: Optional[str] = Header(default=None, alias="Idempotency-Key"),
-    idemp_alt: Optional[str] = Header(default=None, alias="idempotency-key"),
+    idemp_std: str | None = Header(default=None, alias="Idempotency-Key"),
+    idemp_alt: str | None = Header(default=None, alias="idempotency-key"),
 ):
     org_id = claims["org_id"]
     x_idempotency_key = idemp_std or idemp_alt
@@ -83,6 +83,7 @@ async def apply_payment(
         "balance_cents": inv.balance_cents,
     }
 
+
 @router.get("")
 async def list_payments(
     invoice_id: uuid.UUID,
@@ -99,12 +100,16 @@ async def list_payments(
         raise HTTPException(status_code=404, detail="Invoice not found")
 
     rows = (
-        await db.execute(
-            select(Payment)
-            .where(Payment.invoice_id == invoice_id)
-            .order_by(desc(Payment.created_at))
+        (
+            await db.execute(
+                select(Payment)
+                .where(Payment.invoice_id == invoice_id)
+                .order_by(desc(Payment.created_at))
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     return [
         {

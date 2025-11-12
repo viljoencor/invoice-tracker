@@ -2,14 +2,17 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from ..db import async_session_maker
 from ..security import get_current_claims
 
 router = APIRouter(prefix="/dash", tags=["dashboard"])
 
+
 async def get_db():
     async with async_session_maker() as s:
         yield s
+
 
 @router.get("/summary")
 async def summary(claims=Depends(get_current_claims), db: AsyncSession = Depends(get_db)):
@@ -40,12 +43,12 @@ async def summary(claims=Depends(get_current_claims), db: AsyncSession = Depends
             SUM(balance_cents) FILTER (WHERE days_overdue > 90)              AS bkt_90p
         FROM base;
     """)
-    kpis = (await db.execute(sql, {"org": org_id})).mappings().first() or {}
+    kpis: dict = (await db.execute(sql, {"org": org_id})).mappings().first() or {}  # type: ignore[assignment]
 
     rev_sql = text("""
         SELECT date_trunc('month', issue_date) AS month,
                SUM(total_cents) AS total_cents,
-               COUNT(*)         AS count
+               COUNT(*) AS count
         FROM invoices
         WHERE org_id = :org
           AND issue_date >= (current_date - INTERVAL '365 days')
@@ -62,4 +65,4 @@ async def summary(claims=Depends(get_current_claims), db: AsyncSession = Depends
         for r in rev_rows
     ]
 
-    return { **kpis, "revenue_by_month": revenue_by_month }
+    return {**kpis, "revenue_by_month": revenue_by_month}

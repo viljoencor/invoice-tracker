@@ -1,22 +1,21 @@
 # app/routers/invoices.py
 import uuid
-from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, timedelta
-from typing import List
+from decimal import ROUND_HALF_UP, Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Response, Query
-from sqlalchemy import select, desc, func, text, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import desc, func, select, text, update
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import async_session_maker
-from ..models import Invoice, InvoiceItem, Client, InvoiceSeq
+from ..models import Client, Invoice, InvoiceItem
 from ..schemas import (
     InvoiceCreate,
+    InvoiceDetail,  # <-- include detail schema
+    InvoiceList,
     InvoiceOut,
     InvoiceSummary,
-    InvoiceList,
-    InvoiceDetail,   # <-- include detail schema
 )
 from ..security import get_current_claims
 from ..services.pdf import render_invoice_pdf
@@ -25,29 +24,34 @@ router = APIRouter(prefix="/invoices", tags=["invoices"])
 
 # Whitelist of sortable columns (avoid text() / injection)
 ALLOWED_SORTS = {
-    "issue_date":     Invoice.issue_date,
-    "due_date":       Invoice.due_date,
-    "number":         Invoice.number,
-    "total_cents":    Invoice.total_cents,
-    "balance_cents":  Invoice.balance_cents,
-    "status":         Invoice.status,
+    "issue_date": Invoice.issue_date,
+    "due_date": Invoice.due_date,
+    "number": Invoice.number,
+    "total_cents": Invoice.total_cents,
+    "balance_cents": Invoice.balance_cents,
+    "status": Invoice.status,
 }
+
 
 async def get_db():
     async with async_session_maker() as s:
         yield s
 
+
 # -----------------------
 # Helpers (money & seq)
 # -----------------------
 
+
 def _bp_to_fraction(bp: int) -> Decimal:
     return (Decimal(bp) / Decimal(10000)).quantize(Decimal("0.0001"))
+
 
 def _to_cents(x: Decimal) -> int:
     return int(x.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
-def calc_totals(items: List) -> tuple[int, int, int]:
+
+def calc_totals(items: list) -> tuple[int, int, int]:
     subtotal = Decimal(0)
     tax = Decimal(0)
     for it in items:
@@ -62,6 +66,7 @@ def calc_totals(items: List) -> tuple[int, int, int]:
     total_cents = subtotal_cents + tax_cents
     return subtotal_cents, tax_cents, total_cents
 
+
 async def next_invoice_number(db: AsyncSession, org_id: uuid.UUID, year: int) -> str:
     sql = text(
         """
@@ -73,12 +78,14 @@ async def next_invoice_number(db: AsyncSession, org_id: uuid.UUID, year: int) ->
         """
     )
     row = (await db.execute(sql, {"org_id": org_id})).first()
-    next_seq = int(row[0])
+    next_seq = int(row[0])  # type: ignore[index]
     return f"INV-{year}-{next_seq:05d}"
+
 
 # -----------------------
 # Create invoice (POST)
 # -----------------------
+
 
 @router.post("", response_model=InvoiceOut)
 async def create_invoice(
@@ -113,7 +120,7 @@ async def create_invoice(
         tax_cents=tax,
         total_cents=total,
         balance_cents=total,
-        status="draft",   # lower-case to match filters
+        status="draft",  # lower-case to match filters
         notes=body.notes,
         meta={},
     )
@@ -142,7 +149,9 @@ async def create_invoice(
     except IntegrityError as e:
         await db.rollback()
         if "uq_invoices_org_number" in str(e.orig):
-            raise HTTPException(status_code=409, detail=f"Invoice number already exists: {number}")
+            raise HTTPException(
+                status_code=409, detail=f"Invoice number already exists: {number}"
+            ) from e
         raise
 
     return InvoiceOut(
@@ -159,9 +168,11 @@ async def create_invoice(
         status=inv.status,
     )
 
+
 # -----------------------
 # Summary (STATIC - keep BEFORE dynamic routes)
 # -----------------------
+
 
 @router.get("/summary", response_model=InvoiceSummary)
 async def get_invoice_summary(
@@ -209,10 +220,9 @@ async def get_invoice_summary(
     twelve_months_ago = today - timedelta(days=365)
     revenue_query = text(
         """
-        SELECT 
-            date_trunc('month', issue_date) AS month,
-            sum(total_cents)                 AS total_cents,
-            count(*)                         AS count
+        SELECT date_trunc('month', issue_date) AS month,
+            sum(total_cents) AS total_cents,
+            count(*) AS count
         FROM invoices
         WHERE org_id = :org_id
           AND issue_date >= :start_date
@@ -220,7 +230,11 @@ async def get_invoice_summary(
         ORDER BY month DESC
         """
     )
-    rev_rows = (await db.execute(revenue_query, {"org_id": org_id, "start_date": twelve_months_ago})).mappings().all()
+    rev_rows = (
+        (await db.execute(revenue_query, {"org_id": org_id, "start_date": twelve_months_ago}))
+        .mappings()
+        .all()
+    )
     revenue_by_month = [
         {
             "month": r["month"].strftime("%Y-%m"),
@@ -238,9 +252,11 @@ async def get_invoice_summary(
         "revenue_by_month": revenue_by_month,
     }
 
+
 # -----------------------
 # Invoice detail (GET /invoices/{invoice_id})
 # -----------------------
+
 
 @router.get("/{invoice_id}", response_model=InvoiceDetail)
 async def get_invoice(
@@ -261,7 +277,7 @@ async def get_invoice(
             Invoice.total_cents.label("total_cents"),
             Invoice.balance_cents.label("balance_cents"),
             Invoice.status.label("status"),
-            Client.name.label("client_name"),   # for UI
+            Client.name.label("client_name"),  # for UI
         )
         .join(Client, Client.id == Invoice.client_id)
         .where(Invoice.id == invoice_id, Invoice.org_id == claims["org_id"])
@@ -273,9 +289,11 @@ async def get_invoice(
         raise HTTPException(status_code=404, detail="Invoice not found")
     return InvoiceDetail(**row)
 
+
 # -----------------------
 # Get invoice PDF
 # -----------------------
+
 
 @router.get("/{invoice_id}/pdf")
 async def get_invoice_pdf(
@@ -290,7 +308,11 @@ async def get_invoice_pdf(
         raise HTTPException(status_code=404, detail="Invoice not found")
 
     client = await db.scalar(select(Client).where(Client.id == inv.client_id))
-    items = (await db.execute(select(InvoiceItem).where(InvoiceItem.invoice_id == inv.id))).scalars().all()
+    items = (
+        (await db.execute(select(InvoiceItem).where(InvoiceItem.invoice_id == inv.id)))
+        .scalars()
+        .all()
+    )
 
     payload = render_invoice_pdf(
         invoice={
@@ -302,7 +324,7 @@ async def get_invoice_pdf(
             "total_cents": inv.total_cents,
             "balance_cents": inv.balance_cents,
         },
-        client={"name": client.name, "email": client.email},
+        client={"name": client.name, "email": client.email},  # type: ignore[union-attr]
         items=[
             {
                 "description": it.description,
@@ -319,9 +341,11 @@ async def get_invoice_pdf(
         headers={"Content-Disposition": f"inline; filename=invoice-{inv.number}.pdf"},
     )
 
+
 # -----------------------
 # List invoices
 # -----------------------
+
 
 @router.get("", response_model=list[InvoiceList])
 async def list_invoices(
@@ -363,6 +387,7 @@ async def list_invoices(
 
     rows = (await db.execute(stmt)).mappings().all()
     return [InvoiceList(**row) for row in rows]
+
 
 @router.post("/{invoice_id}/send")
 async def mark_invoice_sent(
