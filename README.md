@@ -1,267 +1,221 @@
 # Invoice Tracker
 
-A full-stack invoice management application built with FastAPI, Nuxt 3, and PostgreSQL.
+A production-ready full-stack invoice management system with multi-tenant architecture, designed for small businesses to track invoices, clients, and payments.
+
+## What It Does
+
+Invoice Tracker is a complete billing solution that enables organizations to:
+- **Manage Clients**: Create and maintain client records with contact information
+- **Generate Invoices**: Create itemized invoices with line items and automatic total calculations
+- **Track Payments**: Record and monitor payments against invoices with status tracking
+- **Generate PDFs**: Export professional invoice PDFs for client delivery
+- **Dashboard Analytics**: View revenue trends and key performance indicators
+- **Multi-Tenant Support**: Isolated data per organization with role-based access control
+
+## Architecture & Design
+
+### Technology Stack
+
+**Frontend**: Nuxt 3 (Vue 3), Pinia (state management), TailwindCSS, TypeScript  
+**Backend**: FastAPI (async), SQLAlchemy 2.0 (async ORM), Pydantic v2 (validation)  
+**Database**: PostgreSQL 16 with Alembic migrations  
+**Authentication**: JWT (HS256) with access/refresh tokens, Argon2 password hashing  
+**PDF Generation**: ReportLab with service adapter pattern  
+**Infrastructure**: Docker Compose, Nginx reverse proxy
+
+### System Architecture
+
+```
+┌─────────────────┐
+│   Nuxt 3 SPA    │  → Client-side rendering, reactive UI
+│   (Port 3000)   │     State management with Pinia
+└────────┬────────┘
+         │ HTTP/REST
+         ↓
+┌─────────────────┐
+│  Nginx Proxy    │  → Rate limiting, SSL termination
+│   (Production)  │     Request routing
+└────────┬────────┘
+         │
+         ↓
+┌─────────────────┐
+│  FastAPI API    │  → Async request handling
+│   (Port 8000)   │     JWT authentication
+│                 │     Business logic & validation
+└────────┬────────┘
+         │ asyncpg
+         ↓
+┌─────────────────┐
+│  PostgreSQL 16  │  → Relational data storage
+│   (Port 5432)   │     ACID transactions
+└─────────────────┘
+```
+
+### Data Model
+
+**Organizations** → Multi-tenant isolation root  
+**Users** → Authentication, belongs to Organization  
+**Clients** → Customer records, scoped by Organization  
+**Invoices** → Billing documents with status tracking (draft/sent/paid)  
+**InvoiceItems** → Line items with qty, rate, amount  
+**Payments** → Payment records linked to Invoices
+
+All monetary values stored as integer cents to avoid floating-point precision issues. All queries are organization-scoped for data isolation.
+
+### Security Features
+
+- JWT token authentication with secure refresh mechanism
+- Rate limiting on authentication endpoints (60 req/min)
+- Strong secret validation (32+ character minimum in production)
+- Password hashing with Argon2 (memory-hard algorithm)
+- CORS configuration for cross-origin protection
+- SQL injection prevention via SQLAlchemy ORM
+- Automated security scanning (Bandit, Trivy)
+
+### Production Features
+
+- **Database**: Connection pooling (20 connections), automatic retry with exponential backoff
+- **Monitoring**: Health check endpoints (`/healthz`, `/readiness`), structured JSON logging
+- **Error Handling**: Global exception handling with sanitized production errors
+- **Performance**: Async I/O throughout, database query optimization
+- **Testing**: >80% code coverage with unit, integration, and E2E tests
+- **CI/CD**: Automated linting (Ruff), type checking (MyPy), security scanning
 
 ## Project Structure
 
 ```
-/
+invoice-tracker/
 ├── apps/
-│   ├── backend/         # FastAPI backend
-│   └── frontend/        # Nuxt 3 frontend
-└── infra/              # Docker and infrastructure files
+│   ├── backend/              # FastAPI application
+│   │   ├── app/
+│   │   │   ├── main.py       # App entry, middleware, error handlers
+│   │   │   ├── models.py     # SQLAlchemy ORM models
+│   │   │   ├── schemas.py    # Pydantic request/response schemas
+│   │   │   ├── security.py   # JWT & password utilities
+│   │   │   ├── db.py         # Database connection & pooling
+│   │   │   ├── config.py     # Settings management
+│   │   │   ├── routers/      # API endpoints (auth, invoices, clients, payments)
+│   │   │   ├── services/     # Business logic (PDF generation)
+│   │   │   └── scripts/      # Utility scripts (seeding)
+│   │   ├── migrations/       # Alembic database migrations
+│   │   ├── tests/            # Pytest test suite
+│   │   └── pyproject.toml    # Python dependencies (uv)
+│   └── frontend/             # Nuxt 3 application
+│       ├── pages/            # Route components (dashboard, invoices, clients)
+│       ├── components/       # Reusable UI components
+│       ├── stores/           # Pinia state stores
+│       ├── composables/      # Vue composables (API client)
+│       ├── middleware/       # Route guards (auth)
+│       └── layouts/          # Page layouts
+├── infra/
+│   ├── docker-compose.yml           # Development environment
+│   ├── docker-compose.staging.yml   # Staging environment
+│   ├── docker-compose.prod.yml      # Production environment
+│   └── nginx/nginx.conf             # Reverse proxy config
+└── scripts/
+    └── run-checks.py         # Quality checks runner
 ```
-
-## Prerequisites
-
-- Docker and Docker Compose
-- Node.js 20+ (for local development)
-- Python 3.12+ (for local development)
-- PostgreSQL 16+ (for local development)
 
 ## Quick Start
 
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd invoice-tracker
-   ```
+### Prerequisites
 
-2. Start the development environment:
-   ```bash
-   cd infra
-   docker compose up -d
-   ```
+- Docker & Docker Compose
+- For local development: Node.js 20+, Python 3.12+, PostgreSQL 16+
 
-3. Run database migrations:
-   ```bash
-   docker compose exec backend alembic upgrade head
-   ```
-
-4. Seed the database:
-   ```bash
-   docker compose exec backend python -m app.scripts.seed
-   ```
-
-5. Access the application:
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - Default login: admin@example.com / admin123
-
-## Development Commands
-
-### Backend
+### Run the Application
 
 ```bash
-# Build backend
+# 1. Clone and navigate
+gh repo clone viljoencor/invoice-tracker
+cd invoice-tracker
+
+# 2. Start all services (database, backend, frontend)
 cd infra
-docker compose build backend
+docker compose up --build -d
 
-# Start backend
-docker compose up -d backend
-
-# Run migrations
+# 3. Run database migrations
 docker compose exec backend alembic upgrade head
 
-# Create new migration
-docker compose exec backend alembic revision --autogenerate -m "latest"
-
-# Run seed script
+# 4. Seed demo data (optional)
 docker compose exec backend python -m app.scripts.seed
 
-# View logs
-docker compose logs -f backend
+# 5. Access the application
+# Frontend:  http://localhost:3000
+# API Docs:  http://localhost:8000/docs
+# Health:    http://localhost:8000/healthz
 ```
 
-### Frontend
+**Default Credentials**: `admin@example.com` / `admin123`
+
+### Development Workflow
 
 ```bash
-# Build frontend NOTE(TAKES 15-MIN TO BUILD)
+# Backend development
+cd apps/backend
+uv sync                    # Install dependencies
+uv run pytest              # Run tests
+uv run pytest --cov        # Run tests with coverage
+uv run uvicorn app.main:app --reload  # Dev server
+
+# Frontend development
+cd apps/frontend
+npm install
+npm run dev
+
+# Docker operations
 cd infra
-docker compose build frontend
+docker compose logs -f              # View logs
+docker compose down                 # Stop services
+docker compose down -v              # Stop and remove data
+docker compose exec backend bash    # Shell into backend
 
-# Start frontend
-docker compose up -d frontend
+# Database operations
+docker compose exec backend alembic upgrade head                    # Apply migrations
+docker compose exec backend alembic revision --autogenerate -m "msg"  # Create migration
 
-# View logs
-docker compose logs -f frontend
-```
-### Common Tasks
-
-```bash
-# Rebuild and restart all services
-cd infra
-docker compose down
-docker compose build
-docker compose up -d
-
-# Stop all services
-docker compose down
-
-# Stop and remove all data (including database)
-docker compose down -v
-
-# View all logs
-docker compose logs -f
+# Quality checks
+python scripts/run-checks.py       # Run all checks (lint, format, type, security, tests)
 ```
 
 ## Configuration
 
-### Environment Variables
+### Backend Environment Variables
 
-Backend:
-- `ENVIRONMENT`: Application environment (development/staging/production)
-- `DATABASE_URL`: PostgreSQL connection URL
-- `JWT_SECRET`: Secret key for JWT tokens (minimum 32 characters)
-- `ACCESS_TOKEN_EXPIRE_MINUTES`: JWT access token expiry (default: 60)
-- `REFRESH_TOKEN_EXPIRE_MINUTES`: JWT refresh token expiry (default: 1440)
-- `DB_POOL_SIZE`: Database connection pool size (default: 20)
-- `DB_MAX_OVERFLOW`: Max overflow connections (default: 10)
-- `DB_POOL_RECYCLE`: Connection recycle time in seconds (default: 3600)
-- `RATE_LIMIT_ENABLED`: Enable rate limiting (default: true)
-- `RATE_LIMIT_PER_MINUTE`: Rate limit per minute (default: 60)
-- `LOG_LEVEL`: Logging level (default: INFO)
-- `LOG_JSON_FORMAT`: Use JSON logging format (default: false)
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ENVIRONMENT` | Environment mode | `development` |
+| `DATABASE_URL` | PostgreSQL connection string | Required |
+| `JWT_SECRET` | JWT signing secret (32+ chars) | Required |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Access token lifetime | `60` |
+| `REFRESH_TOKEN_EXPIRE_MINUTES` | Refresh token lifetime | `1440` |
+| `DB_POOL_SIZE` | Connection pool size | `20` |
+| `DB_MAX_OVERFLOW` | Max overflow connections | `10` |
+| `RATE_LIMIT_ENABLED` | Enable rate limiting | `true` |
+| `RATE_LIMIT_PER_MINUTE` | Requests per minute limit | `60` |
+| `LOG_LEVEL` | Logging verbosity | `INFO` |
+| `LOG_JSON_FORMAT` | JSON structured logging | `false` |
 
-Frontend:
-- `NUXT_PUBLIC_API_BASE`: Backend API URL (default: http://localhost:8000)
-- `NODE_ENV`: Node environment (development/production)
+### Frontend Environment Variables
 
-Lean, production-minded MVP you can run locally with Docker Compose.
-
-## Quickstart
-
-```bash
-# 1) Copy env and adjust secrets if needed
-cp .env.example .env
-
-# 2) Build & run (frontend, backend, db)
-docker compose -f infra/docker-compose.yml up --build
-
-# 3) Apply DB migrations (one-time in another terminal)
-docker compose -f infra/docker-compose.yml exec backend alembic upgrade head
-
-# 4) Seed a demo org, user, and sample data (optional)
-docker compose -f infra/docker-compose.yml exec backend python -m app.scripts.seed
-```
-
-# Frontend → http://localhost:3000
-# API docs → http://localhost:8000/docs
-# Health   → http://localhost:8000/healthz
-
-Default credentials (after seeding):
-Email: admin@example.com
-Password: admin123
-
-## Stack
-
-Frontend: Nuxt 3, Pinia, Tailwind
-
-Backend: FastAPI (async), SQLAlchemy 2.0 (async), Pydantic v2, Alembic
-
-Auth: JWT (HS256), Argon2 password hashing
-
-DB: PostgreSQL 16
-
-PDF: ReportLab with a thin adapter (easy to swap later)
-
-## Production-Ready Features
-
-The application includes comprehensive production-ready enhancements:
-
-### Security & Authentication
-- ✅ **JWT Secret Validation**: Enforces strong secrets (32+ chars) in production
-- ✅ **Rate Limiting**: Prevents brute force attacks on auth endpoints (60 req/min default)
-- ✅ **Security Scanning**: Automated vulnerability scanning with Bandit and Trivy
-
-### Database & Performance
-- ✅ **Database Connection Pooling**: Explicit pool configuration (20 connections, 10 overflow)
-- ✅ **Connection Retry Logic**: Automatic retry with exponential backoff on startup
-- ✅ **Health Checks**: `/healthz` (liveness) and `/readiness` (database connectivity)
-
-### Observability & Monitoring
-- ✅ **Structured Logging**: JSON logging for production, pretty logs for development
-- ✅ **Global Exception Handling**: Catches unhandled exceptions, sanitized errors in production
-- ✅ **Environment Detection**: Different behavior for development/staging/production
-
-### Testing & Quality
-- ✅ **Comprehensive Test Suite**: Unit, integration, and E2E tests with >80% coverage
-- ✅ **Automated Linting**: Ruff for code style and quality checks
-- ✅ **Type Checking**: MyPy for static type analysis
-- ✅ **CI/CD Pipeline**: Automated testing, security scanning, and deployment
-
-### Deployment
-- ✅ **Multi-Environment Support**: Separate configs for dev/staging/production
-- ✅ **Docker Health Checks**: All services include health check configuration
-- ✅ **Nginx Reverse Proxy**: Production-ready reverse proxy with SSL and rate limiting
-- ✅ **Rolling Updates**: Zero-downtime deployment support
-
-## Documentation
-
-- 📘 [Production Setup Guide](PRODUCTION-SETUP.md) - Security, logging, monitoring, and production deployment
-- 📘 [Testing & CI/CD Guide](TESTING.md) - Testing strategy, CI/CD pipeline, and quality gates
-- 📘 [API Documentation](http://localhost:8000/docs) - Interactive API docs (when running)
-
-## Development Commands
-
-Use the Makefile for common tasks:
-
-```bash
-# Show all available commands
-make help
-
-# Development workflow
-make dev              # Start everything (build, migrate, seed)
-make test             # Run tests with coverage
-make quality          # Run all quality checks (lint, format, type-check, security)
-
-# Docker operations
-make docker-up        # Start all services
-make docker-down      # Stop all services
-make docker-logs      # View logs
-
-# Database operations
-make migrate          # Run migrations
-make seed            # Seed test data
-make migrate-create msg="description"  # Create new migration
-
-# Code quality
-make lint            # Check linting
-make format          # Format code
-make type-check      # Run type checking
-make security-check  # Security scan
-```
-
-## Testing
-
-```bash
-# Run all tests
-make test
-
-# Run unit tests only
-make test-unit
-
-# Run with verbose output
-make test-verbose
-
-# Run specific test file
-cd apps/backend && uv run pytest tests/test_auth.py
-```
-
-See [TESTING.md](TESTING.md) for comprehensive testing documentation.
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NUXT_PUBLIC_API_BASE` | Backend API URL | `http://localhost:8000` |
+| `NODE_ENV` | Node environment | `development` |
 
 ## Deployment
 
 ### Development
 ```bash
-make dev  # Starts everything with migrations and seed data
+cd infra
+docker compose up --build
 ```
 
 ### Staging
 ```bash
 cd infra
 cp .env.staging.example .env
-# Edit .env with your values
+# Edit .env with staging values
 docker compose -f docker-compose.staging.yml up -d
 ```
 
@@ -269,15 +223,80 @@ docker compose -f docker-compose.staging.yml up -d
 ```bash
 cd infra
 cp .env.prod.example .env
-# Edit .env with production values
+# Edit .env with production values (strong JWT_SECRET, secure DATABASE_URL)
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-See [PRODUCTION-SETUP.md](PRODUCTION-SETUP.md) for detailed deployment guide.
+**Production Checklist**:
+- ✅ Generate strong JWT_SECRET (32+ characters)
+- ✅ Use secure DATABASE_URL with strong credentials
+- ✅ Enable LOG_JSON_FORMAT for structured logging
+- ✅ Configure Nginx SSL certificates
+- ✅ Set up database backups
+- ✅ Configure monitoring and alerting
+
+## Testing & Quality
+
+```bash
+# Run full test suite
+cd apps/backend
+uv run pytest --cov=app --cov-report=html
+
+# Run quality checks
+python scripts/run-checks.py
+
+# Individual checks
+cd apps/backend
+uv run ruff check .          # Linting
+uv run ruff format --check   # Format checking
+uv run mypy app              # Type checking
+uv run bandit -r app         # Security scanning
+```
+
+**Test Coverage**: >80% across unit, integration, and E2E tests
+
+## API Endpoints
+
+### Authentication
+- `POST /api/v1/auth/register` - User registration
+- `POST /api/v1/auth/login` - User login (returns JWT tokens)
+- `POST /api/v1/auth/refresh` - Refresh access token
+- `GET /api/v1/auth/me` - Get current user
+
+### Clients
+- `GET /api/v1/clients` - List clients
+- `POST /api/v1/clients` - Create client
+- `GET /api/v1/clients/{id}` - Get client details
+- `PUT /api/v1/clients/{id}` - Update client
+- `DELETE /api/v1/clients/{id}` - Delete client
+
+### Invoices
+- `GET /api/v1/invoices` - List invoices (with filters)
+- `POST /api/v1/invoices` - Create invoice
+- `GET /api/v1/invoices/{id}` - Get invoice details
+- `PUT /api/v1/invoices/{id}` - Update invoice
+- `DELETE /api/v1/invoices/{id}` - Delete invoice
+- `GET /api/v1/invoices/{id}/pdf` - Download invoice PDF
+
+### Payments
+- `GET /api/v1/payments` - List payments
+- `POST /api/v1/payments` - Record payment
+- `GET /api/v1/payments/{id}` - Get payment details
+- `DELETE /api/v1/payments/{id}` - Delete payment
+
+### Dashboard
+- `GET /api/v1/dashboard/kpis` - Get key metrics
+- `GET /api/v1/dashboard/revenue-chart` - Revenue trends
 
 ## Notes
-- Money stored in integer cents
-- Queries are org-scoped (multi-tenant-ready, simple filter)
-- PDF endpoint returns a generated PDF from server-side (pure Python)
-- Health checks configured for all services
-- Comprehensive test coverage (unit, integration, E2E)
+
+- All monetary amounts stored as integer cents (avoid floating-point errors)
+- All database queries are organization-scoped for multi-tenant isolation
+- Frontend is SPA (SSR disabled) for simplified deployment
+- PDF generation happens server-side using ReportLab
+- Database migrations managed with Alembic
+- Health checks available at `/healthz` (liveness) and `/readiness` (database)
+
+## License
+
+[Add your license here]
