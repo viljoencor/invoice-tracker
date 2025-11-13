@@ -18,19 +18,7 @@ jobs:
     name: Backend Tests
     runs-on: ubuntu-latest
     
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: invoicer_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
+    # Tests use SQLite in-memory database, no PostgreSQL needed for unit tests
     
     defaults:
       run:
@@ -71,7 +59,8 @@ jobs:
       
       - name: Run tests with coverage
         env:
-          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/invoicer_test
+          # Tests use SQLite in-memory database (configured in conftest.py)
+          # DATABASE_URL is intentionally NOT set here - let tests use their own config
           JWT_SECRET: _Bk2swV-irvgVGswT169WWh4ty2DFVgvTS9q3_KtlHo
           ENVIRONMENT: development
         run: |
