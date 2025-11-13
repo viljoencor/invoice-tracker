@@ -22,8 +22,7 @@ async def apply_payment(
     body: PaymentIn,
     claims=Depends(get_current_claims),
     db: AsyncSession = Depends(get_db),
-    # Look for the standard header “Idempotency-Key” (case-insensitive).
-    # Also accept lowercase “idempotency-key” just in case.
+    # fastapi header matching is case-insensitive but being safe here
     idemp_std: str | None = Header(default=None, alias="Idempotency-Key"),
     idemp_alt: str | None = Header(default=None, alias="idempotency-key"),
 ):
@@ -32,7 +31,6 @@ async def apply_payment(
     if not x_idempotency_key:
         raise HTTPException(status_code=400, detail="Missing Idempotency-Key header")
 
-    # Idempotency check
     existing = (
         await db.execute(
             select(Payment).where(
@@ -44,7 +42,6 @@ async def apply_payment(
     if existing:
         return {"status": "ok", "payment_id": str(existing.id), "note": "idempotent-return"}
 
-    # Load invoice and validate
     inv = (
         await db.execute(
             select(Invoice).where(
@@ -55,12 +52,12 @@ async def apply_payment(
     ).scalar_one_or_none()
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    if inv.status in ("VOID", "PAID"):
-        raise HTTPException(status_code=400, detail="Cannot apply payment to VOID/PAID invoice")
+    # NOTE: statuses are lowercase elsewhere but checking uppercase here just in case
+    if inv.status in ("void", "paid", "VOID", "PAID"):
+        raise HTTPException(status_code=400, detail="Cannot apply payment to void/paid invoice")
     if body.amount_cents <= 0 or body.amount_cents > inv.balance_cents:
         raise HTTPException(status_code=400, detail="Invalid payment amount")
 
-    # Create payment + update invoice
     pay = Payment(
         org_id=org_id,
         invoice_id=inv.id,
@@ -71,9 +68,10 @@ async def apply_payment(
         idempotency_key=x_idempotency_key,
     )
     db.add(pay)
-
+    
+    # update balance
     inv.balance_cents = inv.balance_cents - body.amount_cents
-    inv.status = "PAID" if inv.balance_cents == 0 else "PARTIALLY_PAID"
+    inv.status = "paid" if inv.balance_cents == 0 else "partially_paid"
 
     await db.commit()
     return {
@@ -91,33 +89,22 @@ async def list_payments(
     db: AsyncSession = Depends(get_db),
 ):
     org_id = claims["org_id"]
-    inv = (
-        await db.execute(
-            select(Invoice.id).where(Invoice.id == invoice_id, Invoice.org_id == org_id)
-        )
-    ).scalar_one_or_none()
+    inv = (await db.execute(
+        select(Invoice.id).where(Invoice.id == invoice_id, Invoice.org_id == org_id)
+    )).scalar_one_or_none()
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    rows = (await db.execute(
+        select(Payment)
+        .where(Payment.invoice_id == invoice_id)
+        .order_by(desc(Payment.created_at))
+    )).scalars().all()
 
-    rows = (
-        (
-            await db.execute(
-                select(Payment)
-                .where(Payment.invoice_id == invoice_id)
-                .order_by(desc(Payment.created_at))
-            )
-        )
-        .scalars()
-        .all()
-    )
-
-    return [
-        {
-            "id": str(p.id),
-            "amount_cents": p.amount_cents,
-            "received_at": p.received_at,
-            "method": p.method,
-            "reference": p.reference,
-        }
-        for p in rows
-    ]
+    return [{
+        "id": str(p.id),
+        "amount_cents": p.amount_cents,
+        "received_at": p.received_at,
+        "method": p.method,
+        "reference": p.reference,
+    } for p in rows]

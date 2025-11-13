@@ -22,16 +22,14 @@ API_PREFIX = "/api/v1"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: ARG001
-    """Lifespan context manager for startup and shutdown events."""
-    # Startup
     logger.info("Starting application", environment=settings.environment)
 
     try:
-        # Verify database connection with retry logic
         await verify_db_connection(engine)
         logger.info("Database connection established")
     except Exception as e:
         logger.error("Failed to connect to database", error=str(e))
+        # print(f"DB Error: {e}")  # debug
         sys.exit(1)
 
     yield
@@ -51,15 +49,9 @@ app = FastAPI(
 # Add rate limiter state
 app.state.limiter = limiter
 
-# ============================================================================
-# Exception Handlers
-# ============================================================================
-
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Global exception handler for unhandled exceptions."""
-    # Log the full exception with traceback
     logger.error(
         "Unhandled exception",
         exc_info=exc,
@@ -90,7 +82,6 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 @app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
-    """Handle SQLAlchemy database errors."""
     logger.error(
         "Database error",
         exc_info=exc,
@@ -120,7 +111,6 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError) -
 async def validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
-    """Handle request validation errors with detailed information."""
     logger.warning(
         "Validation error",
         errors=exc.errors(),
@@ -140,7 +130,6 @@ async def validation_exception_handler(
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:  # noqa: ARG001
-    """Handle rate limit exceeded errors."""
     logger.warning(
         "Rate limit exceeded",
         path=request.url.path,
@@ -157,14 +146,9 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRe
     )
 
 
-# ============================================================================
-# Middleware
-# ============================================================================
-
-# Trace-id on every response
 app.add_middleware(TraceIdMiddleware)
 
-# CORS: be explicit (don't use "*" with credentials)
+# CORS config
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:3001",
@@ -181,26 +165,19 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],  # includes Authorization, Content-Type
+    allow_headers=["*"],
 )
-
-
-# ============================================================================
-# Health Check Endpoints
-# ============================================================================
 
 
 @app.get("/healthz")
 async def health():
-    """Basic health check endpoint."""
     return {"status": "ok"}
 
 
 @app.get("/readiness")
 async def readiness():
-    """Readiness check - verifies database connectivity."""
     from sqlalchemy import text
-
+    
     try:
         # Quick database check
         async with engine.connect() as conn:
@@ -214,11 +191,6 @@ async def readiness():
         )
 
 
-# ============================================================================
-# API Routers
-# ============================================================================
-
-# Mount API under /api/v1
 app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(clients.router, prefix=API_PREFIX)
 app.include_router(invoices.router, prefix=API_PREFIX)

@@ -14,7 +14,6 @@ export function useApi() {
 
   const tokenCookie = useCookie<string | null>('token', { sameSite: 'lax' })
 
-  // Shared client: injects Authorization, same as before
   const client = $fetch.create({
     baseURL: base,
     credentials: 'omit',
@@ -39,7 +38,6 @@ export function useApi() {
   const join = (p: string) => (p.startsWith('/') ? p : `/${p}`)
 
   return {
-    // JSON helpers
     get:   (path: string, opts?: any) => client(join(path), { method: 'GET', ...opts }),
     post:  (path: string, body?: any, opts?: any) =>
       client(join(path), { method: 'POST', body, ...opts }),

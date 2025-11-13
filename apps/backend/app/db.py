@@ -19,8 +19,6 @@ Base = declarative_base()
 
 
 def create_engine_with_config() -> AsyncEngine:
-    """Create database engine with production-ready configuration."""
-    # SQLite doesn't support pool_size/max_overflow, only use them for PostgreSQL
     if settings.database_url.startswith("sqlite"):
         return create_async_engine(
             settings.database_url,
@@ -38,22 +36,21 @@ def create_engine_with_config() -> AsyncEngine:
         )
 
 
-@retry(
-    stop=stop_after_attempt(5),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type(OperationalError),
-    before_sleep=before_sleep_log(logger, logging.WARNING),
-)
+# Commented out retry logic for now - was causing slow startup in dev
+# @retry(
+#     stop=stop_after_attempt(5),
+#     wait=wait_exponential(multiplier=1, min=2, max=10),
+#     retry=retry_if_exception_type(OperationalError),
+#     before_sleep=before_sleep_log(logger, logging.WARNING),
+# )
 async def verify_db_connection(engine: AsyncEngine) -> None:
-    """Verify database connection with retry logic."""
     from sqlalchemy import text
 
     async with engine.connect() as conn:
         await conn.execute(text("SELECT 1"))
-    logger.info("Database connection verified successfully")
+    logger.info("Database connection verified")
 
 
-# Create engine with configuration
 engine: AsyncEngine = create_engine_with_config()
 
 async_session_maker = sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)  # type: ignore[call-overload]

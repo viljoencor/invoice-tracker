@@ -39,8 +39,6 @@ class Settings(BaseSettings):
     @field_validator("jwt_secret")
     @classmethod
     def validate_jwt_secret(cls, v: str, info) -> str:
-        """Ensure JWT secret is properly configured in production."""
-        # Get environment from values if available
         env = info.data.get("environment", os.getenv("ENVIRONMENT", "development"))
 
         if env == "production" and v == "change-me":
@@ -59,7 +57,6 @@ class Settings(BaseSettings):
     @field_validator("environment")
     @classmethod
     def validate_environment(cls, v: str) -> str:
-        """Ensure environment is a valid value."""
         allowed = {"development", "staging", "production"}
         if v not in allowed:
             raise ValueError(f"ENVIRONMENT must be one of: {', '.join(allowed)}")
@@ -67,12 +64,10 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        """Check if running in production."""
         return self.environment == "production"
 
     @property
     def is_development(self) -> bool:
-        """Check if running in development."""
         return self.environment == "development"
 
 

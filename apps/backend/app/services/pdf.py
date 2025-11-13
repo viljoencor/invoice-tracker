@@ -5,10 +5,7 @@ from reportlab.pdfgen import canvas
 
 
 def render_invoice_pdf(invoice: dict, client: dict, items: list[dict]) -> bytes:
-    """
-    Very simple PDF to keep the stack light (ReportLab). You can swap this out
-    for a headless HTML→PDF adapter later without changing API contracts.
-    """
+    # super basic PDF - could use something fancier later
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4

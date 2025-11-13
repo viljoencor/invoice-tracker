@@ -22,10 +22,6 @@ from .db import Base
 
 
 class JSONType(TypeDecorator):
-    """Platform-independent JSON type.
-    Uses JSONB for PostgreSQL and JSON for other databases (like SQLite).
-    """
-
     impl = JSON
     cache_ok = True
 
@@ -37,10 +33,7 @@ class JSONType(TypeDecorator):
 
 
 class UUIDType(TypeDecorator):
-    """Platform-independent UUID type.
-    Uses PostgreSQL UUID for PostgreSQL and CHAR(36) for other databases (like SQLite).
-    """
-
+    # for sqlite compat
     impl = CHAR
     cache_ok = True
 

@@ -20,7 +20,6 @@ async def get_db():
 @router.post("/register", response_model=TokenPair)
 @limiter.limit(f"{settings.rate_limit_per_minute}/minute")
 async def register(request: Request, body: RegisterRequest, db: AsyncSession = Depends(get_db)):  # noqa: ARG001
-    # create org + user + membership
     q = await db.execute(select(User).where(User.email == body.email))
     if q.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -44,7 +43,7 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # pick first org (demo)
+    # for now just pick first org (multi-org selection later?)
     oq = await db.execute(select(OrgMember.org_id).where(OrgMember.user_id == user.id))
     row = oq.first()
     if not row:

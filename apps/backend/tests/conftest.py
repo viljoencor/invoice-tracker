@@ -1,10 +1,5 @@
-"""
-Pytest configuration and fixtures for testing.
-"""
-
 import os
 
-# Set environment variables for testing BEFORE importing app modules
 os.environ.setdefault("JWT_SECRET", "test-secret-key-that-is-at-least-32-characters-long")
 os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
@@ -22,13 +17,11 @@ from app.db import Base
 from app.models import Client, Org, OrgMember, User
 from app.security import hash_password
 
-# Test database URL (using in-memory SQLite for tests)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 
 @pytest.fixture(scope="session")
 def event_loop() -> Generator:
-    """Create an instance of the default event loop for the test session."""
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
@@ -36,10 +29,8 @@ def event_loop() -> Generator:
 
 @pytest.fixture(scope="function")
 async def test_engine():
-    """Create a test database engine - recreated for each test for isolation."""
     from app.db import engine
 
-    # Enable foreign keys for SQLite
     @event.listens_for(engine.sync_engine, "connect")
     def set_sqlite_pragma(dbapi_conn, connection_record):
         cursor = dbapi_conn.cursor()
@@ -55,7 +46,6 @@ async def test_engine():
 
 @pytest.fixture
 async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
-    """Create a test database session."""
     from app.db import async_session_maker
 
     async with async_session_maker() as session:
@@ -64,7 +54,6 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
 
 @pytest.fixture
 async def test_org(db_session: AsyncSession) -> Org:
-    """Create a test organization."""
     org = Org(name="Test Organization")
     db_session.add(org)
     await db_session.commit()
@@ -74,7 +63,6 @@ async def test_org(db_session: AsyncSession) -> Org:
 
 @pytest.fixture
 async def test_user(db_session: AsyncSession, test_org: Org) -> User:
-    """Create a test user with organization membership."""
     user = User(
         email="test@example.com",
         name="Test User",
@@ -92,7 +80,6 @@ async def test_user(db_session: AsyncSession, test_org: Org) -> User:
 
 @pytest.fixture
 async def test_client_record(db_session: AsyncSession, test_org: Org) -> Client:
-    """Create a test client."""
     client = Client(
         org_id=test_org.id,
         name="Test Client Ltd",
@@ -107,17 +94,14 @@ async def test_client_record(db_session: AsyncSession, test_org: Org) -> Client:
 
 @pytest.fixture
 async def auth_token(test_user: User, test_org: Org) -> str:
-    """Create an authentication token for testing."""
     from app.security import create_access_token
-
+    
     return create_access_token(str(test_user.id), str(test_org.id))
 
 
 @pytest.fixture
 async def client(test_engine) -> AsyncGenerator[AsyncClient, None]:
-    """Create an async HTTP client for testing."""
     from httpx import ASGITransport
-
     from app.main import app as fastapi_app
 
     async with AsyncClient(transport=ASGITransport(app=fastapi_app), base_url="http://test") as ac:
@@ -126,27 +110,24 @@ async def client(test_engine) -> AsyncGenerator[AsyncClient, None]:
 
 @pytest.fixture
 async def authenticated_client(client: AsyncClient, auth_token: str) -> AsyncClient:
-    """Create an authenticated HTTP client."""
     client.headers["Authorization"] = f"Bearer {auth_token}"
     return client
 
 
 @pytest.fixture
 def test_settings() -> Settings:
-    """Create test settings."""
     return Settings(
         environment="development",
         database_url=TEST_DATABASE_URL,
         jwt_secret="_Bk2swV-irvgVGswT169WWh4ty2DFVgvTS9q3_KtlHo",
-        rate_limit_enabled=False,  # Disable rate limiting in tests
+        rate_limit_enabled=False,
     )
 
 
 @pytest.fixture
 def mock_invoice_data(test_client_record: Client) -> dict:
-    """Create mock invoice data for testing."""
     from datetime import date, timedelta
-
+    
     return {
         "client_id": str(test_client_record.id),
         "issue_date": str(date.today()),
