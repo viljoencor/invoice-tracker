@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [ main, master, develop ]
 
+# Required permissions for security scanning
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: read
+
 env:
   PYTHON_VERSION: "3.12"
   NODE_VERSION: "20"
@@ -212,3 +218,4 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-results.sarif'
+        continue-on-error: true  # Allow workflow to succeed even if upload fails (e.g., on forks)
