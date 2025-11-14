@@ -17,6 +17,13 @@ from app.db import Base
 from app.models import Client, Org, OrgMember, User
 from app.security import hash_password
 
+from app.db import engine
+from app.db import async_session_maker
+from app.security import create_access_token
+from app.main import app as fastapi_app
+from httpx import ASGITransport
+from datetime import date, timedelta
+
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 
@@ -29,7 +36,6 @@ def event_loop() -> Generator:
 
 @pytest.fixture(scope="function")
 async def test_engine():
-    from app.db import engine
 
     @event.listens_for(engine.sync_engine, "connect")
     def set_sqlite_pragma(dbapi_conn, connection_record):
@@ -46,7 +52,6 @@ async def test_engine():
 
 @pytest.fixture
 async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
-    from app.db import async_session_maker
 
     async with async_session_maker() as session:
         yield session
@@ -94,16 +99,12 @@ async def test_client_record(db_session: AsyncSession, test_org: Org) -> Client:
 
 @pytest.fixture
 async def auth_token(test_user: User, test_org: Org) -> str:
-    from app.security import create_access_token
 
     return create_access_token(str(test_user.id), str(test_org.id))
 
 
 @pytest.fixture
 async def client(test_engine) -> AsyncGenerator[AsyncClient, None]:
-    from app.main import app as fastapi_app
-    from httpx import ASGITransport
-
     async with AsyncClient(transport=ASGITransport(app=fastapi_app), base_url="http://test") as ac:
         yield ac
 
@@ -126,7 +127,6 @@ def test_settings() -> Settings:
 
 @pytest.fixture
 def mock_invoice_data(test_client_record: Client) -> dict:
-    from datetime import date, timedelta
 
     return {
         "client_id": str(test_client_record.id),
