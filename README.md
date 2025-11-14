@@ -228,12 +228,12 @@ docker compose -f docker-compose.prod.yml up -d
 ```
 
 **Production Checklist**:
-- ✅ Generate strong JWT_SECRET (32+ characters)
-- ✅ Use secure DATABASE_URL with strong credentials
-- ✅ Enable LOG_JSON_FORMAT for structured logging
-- ✅ Configure Nginx SSL certificates
-- ✅ Set up database backups
-- ✅ Configure monitoring and alerting
+- Generate strong JWT_SECRET (32+ characters)
+- Use secure DATABASE_URL with strong credentials
+- Enable LOG_JSON_FORMAT for structured logging
+- Configure Nginx SSL certificates
+- Set up database backups
+- Configure monitoring and alerting
 
 ## Testing & Quality
 
@@ -296,7 +296,3 @@ uv run bandit -r app         # Security scanning
 - PDF generation happens server-side using ReportLab
 - Database migrations managed with Alembic
 - Health checks available at `/healthz` (liveness) and `/readiness` (database)
-
-## License
-
-[Add your license here]
