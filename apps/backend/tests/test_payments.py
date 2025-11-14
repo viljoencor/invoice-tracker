@@ -38,7 +38,7 @@ class TestPayments:
         data = response.json()
         assert data["status"] == "ok"
         assert "payment_id" in data
-        assert data["invoice_status"] == "PARTIALLY_PAID"
+        assert data["invoice_status"] == "partially_paid"
         assert data["balance_cents"] == 6500  # 11500 - 5000
 
     async def test_apply_payment_full_amount(
@@ -71,7 +71,7 @@ class TestPayments:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["invoice_status"] == "PAID"
+        assert data["invoice_status"] == "paid"
         assert data["balance_cents"] == 0
 
     async def test_payment_idempotency(self, authenticated_client: AsyncClient, mock_invoice_data):
