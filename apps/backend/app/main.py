@@ -177,7 +177,7 @@ async def health():
 @app.get("/readiness")
 async def readiness():
     from sqlalchemy import text
-    
+
     try:
         # Quick database check
         async with engine.connect() as conn:

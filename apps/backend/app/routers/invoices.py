@@ -86,7 +86,7 @@ async def create_invoice(
     db: AsyncSession = Depends(get_db),
 ):
     org_id: uuid.UUID = claims["org_id"]
-    
+
     client = await db.scalar(
         select(Client.id).where(Client.id == body.client_id, Client.org_id == org_id)
     )
@@ -113,7 +113,7 @@ async def create_invoice(
         meta={},
     )
     db.add(inv)
-    
+
     for i, it in enumerate(body.items, start=1):
         qty = Decimal(str(it.qty))
         unit = Decimal(it.unit_price_cents)

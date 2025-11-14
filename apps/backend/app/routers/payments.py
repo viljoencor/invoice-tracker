@@ -68,7 +68,7 @@ async def apply_payment(
         idempotency_key=x_idempotency_key,
     )
     db.add(pay)
-    
+
     # update balance
     inv.balance_cents = inv.balance_cents - body.amount_cents
     inv.status = "paid" if inv.balance_cents == 0 else "partially_paid"
@@ -94,7 +94,7 @@ async def list_payments(
     )).scalar_one_or_none()
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    
+
     rows = (await db.execute(
         select(Payment)
         .where(Payment.invoice_id == invoice_id)

@@ -95,14 +95,14 @@ async def test_client_record(db_session: AsyncSession, test_org: Org) -> Client:
 @pytest.fixture
 async def auth_token(test_user: User, test_org: Org) -> str:
     from app.security import create_access_token
-    
+
     return create_access_token(str(test_user.id), str(test_org.id))
 
 
 @pytest.fixture
 async def client(test_engine) -> AsyncGenerator[AsyncClient, None]:
-    from httpx import ASGITransport
     from app.main import app as fastapi_app
+    from httpx import ASGITransport
 
     async with AsyncClient(transport=ASGITransport(app=fastapi_app), base_url="http://test") as ac:
         yield ac
@@ -127,7 +127,7 @@ def test_settings() -> Settings:
 @pytest.fixture
 def mock_invoice_data(test_client_record: Client) -> dict:
     from datetime import date, timedelta
-    
+
     return {
         "client_id": str(test_client_record.id),
         "issue_date": str(date.today()),
