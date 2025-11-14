@@ -31,7 +31,6 @@ def event_loop() -> Generator:
 
 @pytest.fixture(scope="function")
 async def test_engine():
-
     @event.listens_for(engine.sync_engine, "connect")
     def set_sqlite_pragma(dbapi_conn, connection_record):
         cursor = dbapi_conn.cursor()
@@ -47,7 +46,6 @@ async def test_engine():
 
 @pytest.fixture
 async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
-
     async with async_session_maker() as session:
         yield session
 
@@ -94,7 +92,6 @@ async def test_client_record(db_session: AsyncSession, test_org: Org) -> Client:
 
 @pytest.fixture
 async def auth_token(test_user: User, test_org: Org) -> str:
-
     return create_access_token(str(test_user.id), str(test_org.id))
 
 
@@ -122,7 +119,6 @@ def test_settings() -> Settings:
 
 @pytest.fixture
 def mock_invoice_data(test_client_record: Client) -> dict:
-
     return {
         "client_id": str(test_client_record.id),
         "issue_date": str(date.today()),

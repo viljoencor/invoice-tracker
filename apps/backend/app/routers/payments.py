@@ -89,22 +89,33 @@ async def list_payments(
     db: AsyncSession = Depends(get_db),
 ):
     org_id = claims["org_id"]
-    inv = (await db.execute(
-        select(Invoice.id).where(Invoice.id == invoice_id, Invoice.org_id == org_id)
-    )).scalar_one_or_none()
+    inv = (
+        await db.execute(
+            select(Invoice.id).where(Invoice.id == invoice_id, Invoice.org_id == org_id)
+        )
+    ).scalar_one_or_none()
     if not inv:
         raise HTTPException(status_code=404, detail="Invoice not found")
 
-    rows = (await db.execute(
-        select(Payment)
-        .where(Payment.invoice_id == invoice_id)
-        .order_by(desc(Payment.created_at))
-    )).scalars().all()
+    rows = (
+        (
+            await db.execute(
+                select(Payment)
+                .where(Payment.invoice_id == invoice_id)
+                .order_by(desc(Payment.created_at))
+            )
+        )
+        .scalars()
+        .all()
+    )
 
-    return [{
-        "id": str(p.id),
-        "amount_cents": p.amount_cents,
-        "received_at": p.received_at,
-        "method": p.method,
-        "reference": p.reference,
-    } for p in rows]
+    return [
+        {
+            "id": str(p.id),
+            "amount_cents": p.amount_cents,
+            "received_at": p.received_at,
+            "method": p.method,
+            "reference": p.reference,
+        }
+        for p in rows
+    ]

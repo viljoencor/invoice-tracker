@@ -48,4 +48,5 @@ def configure_logging() -> None:
 def get_logger(name: str) -> Any:
     return structlog.get_logger(name)
 
+
 configure_logging()
