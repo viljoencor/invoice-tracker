@@ -1,5 +1,5 @@
 import asyncio
-from datetime import date, timedelta
+from datetime import date
 
 from argon2 import PasswordHasher
 
@@ -41,7 +41,7 @@ async def run():
             status="draft",
             notes="Consulting services",
         )
-        
+
         inv2 = Invoice(
             org_id=org.id,
             client_id=c1.id,
@@ -55,7 +55,7 @@ async def run():
             balance_cents=11500,
             status="draft",
         )
-        
+
         inv3 = Invoice(
             org_id=org.id,
             client_id=c2.id,
@@ -69,7 +69,7 @@ async def run():
             balance_cents=57500,
             status="draft",
         )
-        
+
         inv4 = Invoice(
             org_id=org.id,
             client_id=c1.id,
@@ -83,7 +83,7 @@ async def run():
             balance_cents=11500,
             status="draft",
         )
-        
+
         inv5 = Invoice(
             org_id=org.id,
             client_id=c1.id,
@@ -97,7 +97,7 @@ async def run():
             balance_cents=0,
             status="paid",
         )
-        
+
         inv6 = Invoice(
             org_id=org.id,
             client_id=c3.id,
@@ -111,7 +111,7 @@ async def run():
             balance_cents=700000,
             status="partially_paid",
         )
-        
+
         inv7 = Invoice(
             org_id=org.id,
             client_id=c1.id,
@@ -125,7 +125,7 @@ async def run():
             balance_cents=11500,
             status="draft",
         )
-        
+
         db.add_all([inv1, inv2, inv3, inv4, inv5, inv6, inv7])
         await db.flush()
 
@@ -196,7 +196,7 @@ async def run():
             ),
         ]
         db.add_all(items)
-        
+
         # Create payments
         payment1 = Payment(
             org_id=org.id,
@@ -207,7 +207,7 @@ async def run():
             reference="PAY-001",
             idempotency_key="seed-payment-1",
         )
-        
+
         payment2 = Payment(
             org_id=org.id,
             invoice_id=inv6.id,
@@ -217,9 +217,9 @@ async def run():
             reference="PAY-002",
             idempotency_key="seed-payment-2",
         )
-        
+
         db.add_all([payment1, payment2])
-        
+
         await db.commit()
         print("Seeded complete database:")
         print("  - 1 org, 1 user (admin@example.com / admin123)")
