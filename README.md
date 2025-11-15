@@ -10,7 +10,9 @@ Invoice Tracker is a complete billing solution that enables organizations to:
 - **Track Payments**: Record and monitor payments against invoices with status tracking
 - **Generate PDFs**: Export professional invoice PDFs for client delivery
 - **Dashboard Analytics**: View revenue trends and key performance indicators
-- **Multi-Tenant Support**: Isolated data per organization with role-based access control
+- **Multi-Tenant Support**: Isolated data per organization
+
+![alt text](https://github.com/viljoencor/invoice-tracker/blob/master/apps/frontend/assets/invoicer.jpg?raw=true)
 
 ## Architecture & Design
 
