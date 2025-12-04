@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+
 definePageMeta({ middleware: 'auth' })
 
 const { get, post } = useApi()
@@ -26,6 +28,8 @@ const form = reactive<{
   notes: '',
   items: [{ description: 'Service', qty: 1, unit_price_cents: 10000, tax_rate_bp: 1500 }]
 })
+
+const activeClients = computed(() => clients.value.filter(c => !c.is_archived))
 
 onMounted(async () => {
   clients.value = await get('/clients')
@@ -87,7 +91,7 @@ async function submit() {
             class="mt-1 w-full p-2 border rounded"
             aria-describedby="client-hint"
           >
-            <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
+            <option v-for="c in activeClients" :key="c.id" :value="c.id">{{ c.name }}</option>
           </select>
           <p id="client-hint" class="mt-1 text-xs text-gray-500">
             Choose who you’re billing.

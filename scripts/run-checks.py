@@ -11,7 +11,7 @@ from pathlib import Path
 def run_command(cmd: list[str], description: str, cwd: Path = None) -> bool:
     """Run a command and return success status."""
     print(f"\n{'='*60}")
-    print(f"🔍 {description}")
+    print(f"{description}")
     print(f"{'='*60}")
     
     try:
@@ -22,21 +22,21 @@ def run_command(cmd: list[str], description: str, cwd: Path = None) -> bool:
             text=True,
             cwd=cwd
         )
-        print(f"✅ {description} - PASSED")
+        print(f"{description} - PASSED")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"❌ {description} - FAILED")
+        print(f"{description} - FAILED")
         return False
 
 
 def main():
     """Run all quality checks and tests."""
-    print("🚀 Invoice Tracker - Quality Check Runner")
+    print("Invoice Tracker - Quality Check Runner")
     print("=" * 60)
     
     # Change to backend directory
     backend_dir = Path(__file__).parent.parent / "apps" / "backend"
-    print(f"📁 Working directory: {backend_dir}\n")
+    print(f"Working directory: {backend_dir}\n")
     
     checks = [
         (["uv", "run", "ruff", "check", "app", "tests"], "Linting (Ruff)", backend_dir),
@@ -54,21 +54,21 @@ def main():
     
     # Summary
     print(f"\n{'='*60}")
-    print("📊 SUMMARY")
+    print("SUMMARY")
     print(f"{'='*60}")
     
     for description, success in results:
-        status = "✅ PASS" if success else "❌ FAIL"
+        status = "PASS" if success else "FAIL"
         print(f"{status} - {description}")
     
     # Exit code
     all_passed = all(success for _, success in results)
     
     if all_passed:
-        print(f"\n✨ All checks passed! Ready to commit.")
+        print(f"\n All checks passed! Ready to commit.")
         sys.exit(0)
     else:
-        print(f"\n⚠️  Some checks failed. Please fix issues before committing.")
+        print(f"\n Some checks failed. Please fix issues before committing.")
         sys.exit(1)
 
 

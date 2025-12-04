@@ -92,6 +92,9 @@ async def create_invoice(
     )
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
+    
+    if not client:
+        raise HTTPException(status_code=400, detail="Cannot create invoice for archived client")
 
     subtotal, tax, total = calc_totals(body.items)
     number = await next_invoice_number(db, org_id, body.issue_date.year)
