@@ -2,7 +2,7 @@
 import uuid
 from datetime import date
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 # --- Auth ---
@@ -30,13 +30,12 @@ class ClientIn(BaseModel):
 
 
 class ClientOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: uuid.UUID
     name: str
     email: EmailStr | None = None
     billing_address: str | None = None
-
-    class Config:
-        from_attributes = True
 
 
 # --- Invoices ---
@@ -57,6 +56,8 @@ class InvoiceCreate(BaseModel):
 
 
 class InvoiceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: uuid.UUID
     number: str
     client_id: uuid.UUID
@@ -68,9 +69,6 @@ class InvoiceOut(BaseModel):
     total_cents: int
     balance_cents: int
     status: str
-
-    class Config:
-        from_attributes = True
 
 
 # Detail view includes client_name
@@ -87,6 +85,8 @@ class PaymentIn(BaseModel):
 
 
 class InvoiceList(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: uuid.UUID
     number: str
     client_name: str
@@ -96,9 +96,6 @@ class InvoiceList(BaseModel):
     balance_cents: int
     status: str
     currency: str
-
-    class Config:
-        from_attributes = True
 
 
 class InvoiceSummary(BaseModel):

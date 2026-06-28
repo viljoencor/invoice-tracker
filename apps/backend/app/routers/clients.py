@@ -2,17 +2,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db import async_session_maker
+from ..db import get_db
 from ..models import Client
 from ..schemas import ClientIn, ClientOut
 from ..security import get_current_claims
 
 router = APIRouter(prefix="/clients", tags=["clients"])
-
-
-async def get_db():
-    async with async_session_maker() as s:
-        yield s
 
 
 @router.post("", response_model=ClientOut)

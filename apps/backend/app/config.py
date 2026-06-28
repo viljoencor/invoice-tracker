@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     db_pool_recycle: int = Field(default=3600, ge=300)  # seconds
     db_pool_pre_ping: bool = True
 
+    # Database startup retry
+    db_startup_retry_attempts: int = Field(default=5, ge=1, le=20)
+    db_startup_retry_max_wait: int = Field(default=10, ge=1, le=60)
+
     # Security
     jwt_secret: str = Field(default="change-me")
     access_token_expire_minutes: int = 30

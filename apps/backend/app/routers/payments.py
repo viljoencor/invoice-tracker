@@ -4,17 +4,12 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db import async_session_maker
+from ..db import get_db
 from ..models import Invoice, Payment
 from ..schemas import PaymentIn
 from ..security import get_current_claims
 
 router = APIRouter(prefix="/payments", tags=["payments"])
-
-
-async def get_db():
-    async with async_session_maker() as s:
-        yield s
 
 
 @router.post("")

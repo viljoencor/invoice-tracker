@@ -3,18 +3,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
-from ..db import async_session_maker
+from ..db import get_db
 from ..middleware import limiter
 from ..models import Org, OrgMember, User
 from ..schemas import LoginRequest, RegisterRequest, TokenPair
 from ..security import create_access_token, hash_password, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-
-
-async def get_db():
-    async with async_session_maker() as s:
-        yield s
 
 
 @router.post("/register", response_model=TokenPair)

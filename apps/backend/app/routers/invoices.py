@@ -8,7 +8,7 @@ from sqlalchemy import desc, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db import async_session_maker
+from ..db import get_db
 from ..models import Client, Invoice, InvoiceItem
 from ..schemas import (
     InvoiceCreate,
@@ -30,11 +30,6 @@ ALLOWED_SORTS = {
     "balance_cents": Invoice.balance_cents,
     "status": Invoice.status,
 }
-
-
-async def get_db():
-    async with async_session_maker() as s:
-        yield s
 
 
 def _bp_to_fraction(bp: int) -> Decimal:
@@ -92,9 +87,6 @@ async def create_invoice(
     )
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-    
-    if not client:
-        raise HTTPException(status_code=400, detail="Cannot create invoice for archived client")
 
     subtotal, tax, total = calc_totals(body.items)
     number = await next_invoice_number(db, org_id, body.issue_date.year)

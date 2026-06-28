@@ -3,15 +3,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db import async_session_maker
+from ..db import get_db
 from ..security import get_current_claims
 
 router = APIRouter(prefix="/dash", tags=["dashboard"])
-
-
-async def get_db():
-    async with async_session_maker() as s:
-        yield s
 
 
 @router.get("/summary")
