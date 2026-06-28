@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..db import get_db
 from ..models import Invoice, Payment
 from ..schemas import PaymentIn
-from ..security import get_current_claims
+from ..security import get_current_claims, require_role
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 @router.post("")
 async def apply_payment(
     body: PaymentIn,
-    claims=Depends(get_current_claims),
+    claims: dict = Depends(require_role("OWNER")),
     db: AsyncSession = Depends(get_db),
     # fastapi header matching is case-insensitive but being safe here
     idemp_std: str | None = Header(default=None, alias="Idempotency-Key"),

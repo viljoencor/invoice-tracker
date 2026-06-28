@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 # --- Auth ---
 class TokenPair(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
 
 
@@ -22,9 +23,27 @@ class RegisterRequest(BaseModel):
     password: str
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class UserOut(BaseModel):
+    id: uuid.UUID
+    email: EmailStr
+    name: str
+    org_id: uuid.UUID
+    role: str
+
+
 # --- Clients ---
 class ClientIn(BaseModel):
     name: str
+    email: EmailStr | None = None
+    billing_address: str | None = None
+
+
+class ClientUpdate(BaseModel):
+    name: str | None = None
     email: EmailStr | None = None
     billing_address: str | None = None
 

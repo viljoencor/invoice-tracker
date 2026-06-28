@@ -17,7 +17,7 @@ from ..schemas import (
     InvoiceOut,
     InvoiceSummary,
 )
-from ..security import get_current_claims
+from ..security import get_current_claims, require_role
 from ..services.pdf import render_invoice_pdf
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
@@ -77,7 +77,7 @@ async def next_invoice_number(db: AsyncSession, org_id: uuid.UUID, year: int) ->
 @router.post("", response_model=InvoiceOut)
 async def create_invoice(
     body: InvoiceCreate,
-    claims=Depends(get_current_claims),
+    claims: dict = Depends(require_role("OWNER")),
     db: AsyncSession = Depends(get_db),
 ):
     org_id: uuid.UUID = claims["org_id"]
@@ -356,7 +356,7 @@ async def list_invoices(
 @router.post("/{invoice_id}/send")
 async def mark_invoice_sent(
     invoice_id: uuid.UUID,
-    claims=Depends(get_current_claims),
+    claims: dict = Depends(require_role("OWNER")),
     db: AsyncSession = Depends(get_db),
 ):
     org_id = claims["org_id"]
