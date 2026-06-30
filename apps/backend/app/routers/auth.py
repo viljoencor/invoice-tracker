@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
 from ..db import get_db
+from ..logging_config import get_logger
 from ..middleware import limiter
 from ..models import Org, OrgMember, RefreshToken, User
 from ..schemas import LoginRequest, RefreshRequest, RegisterRequest, TokenPair, UserOut
@@ -20,6 +21,7 @@ from ..security import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+audit = get_logger("audit")
 
 
 @router.post("/register", response_model=TokenPair)
@@ -42,6 +44,7 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
     await db.commit()
 
     access = create_access_token(str(user.id), str(org.id), "OWNER")
+    audit.info("auth.register.success", user_id=str(user.id), org_id=str(org.id))
     return TokenPair(access_token=access, refresh_token=raw_refresh)
 
 
@@ -51,6 +54,7 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
     q = await db.execute(select(User).where(User.email == body.email))
     user = q.scalar_one_or_none()
     if not user or not verify_password(body.password, user.password_hash):
+        audit.warning("auth.login.failure", category="invalid_credentials")
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     oq = await db.execute(
@@ -68,6 +72,7 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
     await db.commit()
 
     access = create_access_token(str(user.id), str(org_id), role)
+    audit.info("auth.login.success", user_id=str(user.id), org_id=str(org_id), role=role)
     return TokenPair(access_token=access, refresh_token=raw_refresh)
 
 
@@ -106,6 +111,7 @@ async def refresh_tokens(body: RefreshRequest, db: AsyncSession = Depends(get_db
         await db.execute(select(RefreshToken).where(RefreshToken.token_hash == token_hash))
     ).scalar_one_or_none()
     if not rt:
+        audit.warning("auth.refresh.rejected", category="not_found")
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
     # Normalise expiry for SQLite (stored as TZ-naive)
@@ -114,6 +120,7 @@ async def refresh_tokens(body: RefreshRequest, db: AsyncSession = Depends(get_db
         expires = expires.replace(tzinfo=UTC)
 
     if rt.revoked or expires <= now:
+        audit.warning("auth.refresh.rejected", category="revoked_or_expired")
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
     membership = (
@@ -125,6 +132,7 @@ async def refresh_tokens(body: RefreshRequest, db: AsyncSession = Depends(get_db
         )
     ).scalar_one_or_none()
     if not membership:
+        audit.warning("auth.refresh.rejected", category="no_membership")
         raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
     # Rotate: revoke the used token, issue a replacement
@@ -142,6 +150,12 @@ async def refresh_tokens(body: RefreshRequest, db: AsyncSession = Depends(get_db
     await db.commit()
 
     access = create_access_token(str(rt.user_id), str(rt.org_id), membership.role)
+    audit.info(
+        "auth.refresh.success",
+        user_id=str(rt.user_id),
+        org_id=str(rt.org_id),
+        role=membership.role,
+    )
     return TokenPair(access_token=access, refresh_token=raw_new)
 
 
@@ -153,4 +167,5 @@ async def logout(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
         update(RefreshToken).where(RefreshToken.token_hash == token_hash).values(revoked=True)
     )
     await db.commit()
+    audit.info("auth.logout.revoke_requested")
     return None
