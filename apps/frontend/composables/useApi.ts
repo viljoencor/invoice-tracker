@@ -30,7 +30,7 @@ export function useApi() {
     onResponseError({ response }) {
       if (response.status === 401) {
         tokenCookie.value = null
-        return navigateTo('/login')
+        void navigateTo('/login')
       }
     },
   })
@@ -38,17 +38,15 @@ export function useApi() {
   const join = (p: string) => (p.startsWith('/') ? p : `/${p}`)
 
   return {
-    get:   (path: string, opts?: any) => client(join(path), { method: 'GET', ...opts }),
-    post:  (path: string, body?: any, opts?: any) =>
-      client(join(path), { method: 'POST', body, ...opts }),
-    patch: (path: string, body?: any, opts?: any) =>
-      client(join(path), { method: 'PATCH', body, ...opts }),
-    del:   (path: string, opts?: any) => client(join(path), { method: 'DELETE', ...opts }),
+    get:   <T = unknown>(path: string, opts?: any) => client<T>(join(path), { method: 'GET', ...opts }),
+    post:  <T = unknown>(path: string, body?: any, opts?: any) => client<T>(join(path), { method: 'POST', body, ...opts }),
+    patch: <T = unknown>(path: string, body?: any, opts?: any) => client<T>(join(path), { method: 'PATCH', body, ...opts }),
+    del:   <T = unknown>(path: string, opts?: any) => client<T>(join(path), { method: 'DELETE', ...opts }),
 
-    // NEW: binary helpers (still send Authorization)
+    // Binary helpers
     getArrayBuffer: (path: string, opts?: any) =>
-      client(join(path), { method: 'GET', responseType: 'arrayBuffer', ...opts }),
+      client<ArrayBuffer>(join(path), { method: 'GET', responseType: 'arrayBuffer', ...opts }),
     getBlob: (path: string, opts?: any) =>
-      client(join(path), { method: 'GET', responseType: 'blob', ...opts }),
+      client<Blob>(join(path), { method: 'GET', responseType: 'blob', ...opts }),
   }
 }

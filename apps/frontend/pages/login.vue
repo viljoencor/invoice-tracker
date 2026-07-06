@@ -67,7 +67,7 @@ async function onSubmit() {
     // Store ONLY the raw JWT; the composable adds "Bearer " properly
     tokenCookie.value = access_token
 
-    await navigateTo('/dashboard') // or "/" depending on your choice
+    await navigateTo('/') // dashboard lives at "/"
   } catch (e: any) {
     error.value =
       e?.data?.detail?.message ||

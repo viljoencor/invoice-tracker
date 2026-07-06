@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { InvoiceList } from '~/types/api'
+
 definePageMeta({ middleware: 'auth' })
 
 import { ref } from 'vue'
@@ -7,10 +9,10 @@ import { useApi } from '~/composables/useApi'
 const api = useApi()
 
 // Always return an array so v-for can render immediately
-const { data: invoices, pending, error, refresh } = await useAsyncData(
+const { data: invoices, pending, error, refresh } = await useAsyncData<InvoiceList[]>(
   'invoices',
-  () => api.get('/invoices', { params: { sort: '-issue_date', limit: 50 } }),
-  { default: () => [] }                     // <-- important
+  () => api.get<InvoiceList[]>('/invoices', { params: { sort: '-issue_date', limit: 50 } }),
+  { default: (): InvoiceList[] => [] },
 )
 
 function formatCurrency(amount: number): string {
@@ -100,7 +102,7 @@ const statuses: Record<string, string> = {
                   </tr>
 
                   <!-- Optional: empty state -->
-                  <tr v-if="invoices.length === 0">
+                  <tr v-if="(invoices ?? []).length === 0">
                     <td colspan="7" class="py-6 text-center text-sm text-gray-500">
                       No invoices yet.
                     </td>

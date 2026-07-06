@@ -1,11 +1,13 @@
 <script setup lang="ts">
+import type { ClientOut } from '~/types/api'
+
 definePageMeta({ middleware: 'auth' })
 
 const { get } = useApi()
-const list = ref<any[]>([])
+const list = ref<ClientOut[]>([])
 
 onMounted(async () => {
-  list.value = await get('/clients')
+  list.value = await get<ClientOut[]>('/clients')
 })
 </script>
 

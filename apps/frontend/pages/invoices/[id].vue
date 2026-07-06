@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { InvoiceDetail, PaymentOut } from '~/types/api'
+
 definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
@@ -6,13 +8,13 @@ const id = computed(() => String(route.params.id))
 const api = useApi()
 
 // include refresh so we can re-fetch after a payment
-const { data, pending, error, refresh } = await useAsyncData(
+const { data, pending, error, refresh } = await useAsyncData<InvoiceDetail | null>(
   () => `invoice-${id.value}`,
-  () => api.get(`/invoices/${id.value}`),
-  { default: () => null }
+  () => api.get<InvoiceDetail>(`/invoices/${id.value}`),
+  { default: (): InvoiceDetail | null => null },
 )
 
-const invoice = computed<any | null>(() => data.value ?? null)
+const invoice = computed(() => data.value)
 
 const formatCurrency = (cents: number) =>
   new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format((cents ?? 0) / 100)
@@ -91,13 +93,13 @@ async function recordPayment() {
 }
 
 // ---------- (Optional) fetch payments list to show history ----------
-const { data: paymentsData, refresh: refreshPayments } = await useAsyncData(
+const { data: paymentsData, refresh: refreshPayments } = await useAsyncData<PaymentOut[]>(
   () => `payments-${id.value}`,
-  () => api.get('/payments', { params: { invoice_id: id.value } }),
-  { default: () => [] }
+  () => api.get<PaymentOut[]>('/payments', { params: { invoice_id: id.value } }),
+  { default: (): PaymentOut[] => [] },
 )
 watch(data, () => refreshPayments()) // refresh payments when invoice refetches
-const payments = computed<any[]>(() => paymentsData.value || [])
+const payments = computed(() => paymentsData.value ?? [])
 </script>
 
 <template>

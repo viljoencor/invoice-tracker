@@ -2,7 +2,6 @@
 export default defineNuxtConfig({
   ssr: false,
   nitro: {
-    compatible: true,
     compressPublicAssets: true,
   },
   devtools: { enabled: true },
@@ -14,9 +13,7 @@ export default defineNuxtConfig({
       autoprefixer: {},
     },
   },
-  pinia: {
-    autoImports: ['defineStore', 'storeToRefs'],
-  },
+
   runtimeConfig: {
     public: {
       apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000/api/v1',
@@ -39,7 +36,7 @@ export default defineNuxtConfig({
   },
   typescript: {
     strict: true,
-    typeCheck: false, // Disable type checking during development
+    typeCheck: true,
   },
   imports: {
     dirs: ['stores'],

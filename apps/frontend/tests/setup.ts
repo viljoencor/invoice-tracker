@@ -23,7 +23,7 @@ export const mockClearError = vi.fn()
 /** The fetch function returned by $fetch.create() */
 export const mockFetchClient = vi.fn()
 /** Spy for $fetch.create() */
-export const mockFetchCreate = vi.fn(() => mockFetchClient)
+export const mockFetchCreate = vi.fn()
 
 // ── Nuxt composable stubs ─────────────────────────────────────────────────────
 vi.stubGlobal('useRuntimeConfig', () => ({

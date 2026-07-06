@@ -1,29 +1,43 @@
 <script setup lang="ts">
+import { useForm, useField } from 'vee-validate'
+import { toTypedSchema } from '@vee-validate/zod'
+import { z } from 'zod'
+
 definePageMeta({ middleware: 'auth' })
 
 const { post } = useApi()
 
-const name = ref('')
-const email = ref('')
-const billing_address = ref('')
+const clientSchema = toTypedSchema(
+  z.object({
+    name: z.string().min(1, 'Client name is required'),
+    email: z
+      .union([z.string().email('Invalid email format'), z.literal('')])
+      .optional()
+      .transform((v) => v || null),
+    billing_address: z.string().optional().transform((v) => v || null),
+  }),
+)
 
-const canCreate = computed(() => name.value.trim().length > 0)
+const { handleSubmit, errors, isSubmitting } = useForm({ validationSchema: clientSchema })
+const { value: name } = useField<string>('name', undefined, { initialValue: '' })
+const { value: email } = useField<string>('email', undefined, { initialValue: '' })
+const { value: billing_address } = useField<string>('billing_address', undefined, { initialValue: '' })
 
-async function create() {
+const onCreate = handleSubmit(async (values) => {
   await post('/clients', {
-    name: name.value,
-    email: email.value || null,
-    billing_address: billing_address.value || null
+    name: values.name,
+    email: values.email ?? null,
+    billing_address: values.billing_address ?? null,
   })
   navigateTo('/clients')
-}
+})
 </script>
 
 <template>
   <div class="p-6 space-y-6">
     <h1 class="text-2xl font-semibold">New Client</h1>
 
-    <div class="bg-white p-5 rounded-2xl shadow space-y-5">
+    <form class="bg-white p-5 rounded-2xl shadow space-y-5" @submit.prevent="onCreate">
       <div>
         <label for="client-name" class="block text-sm font-medium text-gray-700">
           Client Name
@@ -33,9 +47,13 @@ async function create() {
           v-model="name"
           placeholder="e.g. Acme Pty Ltd"
           class="mt-1 w-full p-2 border rounded"
-          aria-describedby="name-hint"
+          :class="{ 'border-red-500': errors.name }"
+          aria-describedby="name-hint name-error"
         />
-        <p id="name-hint" class="mt-1 text-xs text-gray-500">
+        <p v-if="errors.name" id="name-error" class="mt-1 text-xs text-red-600" data-testid="name-error">
+          {{ errors.name }}
+        </p>
+        <p v-else id="name-hint" class="mt-1 text-xs text-gray-500">
           The legal or trading name that will appear on invoices.
         </p>
       </div>
@@ -47,13 +65,17 @@ async function create() {
         <input
           id="client-email"
           v-model="email"
-          type="email"
+          type="text"
           placeholder="billing@company.co.za"
           class="mt-1 w-full p-2 border rounded"
-          aria-describedby="email-hint"
+          :class="{ 'border-red-500': errors.email }"
+          aria-describedby="email-hint email-error"
         />
-        <p id="email-hint" class="mt-1 text-xs text-gray-500">
-          Where you’ll send invoices and statements.
+        <p v-if="errors.email" id="email-error" class="mt-1 text-xs text-red-600" data-testid="email-error">
+          {{ errors.email }}
+        </p>
+        <p v-else id="email-hint" class="mt-1 text-xs text-gray-500">
+          Where you'll send invoices and statements.
         </p>
       </div>
 
@@ -75,16 +97,14 @@ async function create() {
 
       <div class="pt-2">
         <button
-          @click="create"
-          :disabled="!canCreate"
+          type="submit"
+          :disabled="isSubmitting"
           class="px-4 py-2 rounded bg-black text-white disabled:opacity-50"
+          data-testid="client-submit"
         >
           Create Client
         </button>
-        <span v-if="!canCreate" class="ml-2 text-xs text-gray-500">
-          Enter at least a client name.
-        </span>
       </div>
-    </div>
+    </form>
   </div>
 </template>
