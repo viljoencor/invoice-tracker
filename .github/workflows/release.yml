@@ -1,0 +1,153 @@
+name: Release
+
+# Manual, auditable release workflow.
+#
+# Purpose: promote an already-published immutable image tag to a named
+# environment channel (staging or production) and record the release in the
+# GitHub Releases page for audit trail.
+#
+# Limitations (documented):
+#   No deployment server / orchestrator is configured in this repository.
+#   This workflow records the release intent and tags the images in GHCR with
+#   the environment channel name. Actual server deployment must be performed
+#   manually (or by a future deployment workflow) using the printed image refs.
+#
+# Prerequisites:
+#   - The `publish` job in ci.yml must have already run for the commit SHA.
+#   - The caller must have `write` access to the repository.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Immutable image tag to release (e.g. sha-abc1234)"
+        required: true
+        type: string
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      release_notes:
+        description: "Optional release notes"
+        required: false
+        type: string
+
+permissions:
+  contents: write   # create GitHub Release
+  packages: write   # re-tag image in GHCR
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  release:
+    name: "Release ${{ inputs.image_tag }} → ${{ inputs.environment }}"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}  # uses GitHub environment protection rules
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image names
+        id: names
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "backend=${REGISTRY}/${OWNER}/invoice-tracker-backend" >> "$GITHUB_OUTPUT"
+          echo "frontend=${REGISTRY}/${OWNER}/invoice-tracker-frontend" >> "$GITHUB_OUTPUT"
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify source images exist
+        run: |
+          docker manifest inspect \
+            "${{ steps.names.outputs.backend }}:${{ inputs.image_tag }}" \
+            > /dev/null
+          docker manifest inspect \
+            "${{ steps.names.outputs.frontend }}:${{ inputs.image_tag }}" \
+            > /dev/null
+          echo "✓ Both images found in registry"
+
+      # Tag the immutable SHA image with the environment channel name.
+      # The SHA tag is retained — we are only adding an alias.
+      - name: Tag backend image as ${{ inputs.environment }}
+        run: |
+          docker buildx imagetools create \
+            --tag "${{ steps.names.outputs.backend }}:${{ inputs.environment }}" \
+            "${{ steps.names.outputs.backend }}:${{ inputs.image_tag }}"
+
+      - name: Tag frontend image as ${{ inputs.environment }}
+        run: |
+          docker buildx imagetools create \
+            --tag "${{ steps.names.outputs.frontend }}:${{ inputs.environment }}" \
+            "${{ steps.names.outputs.frontend }}:${{ inputs.image_tag }}"
+
+      - name: Create GitHub Release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = `release/${context.payload.inputs.environment}/${context.payload.inputs.image_tag}`;
+            const body = [
+              `## Release to ${context.payload.inputs.environment}`,
+              ``,
+              `**Image tag:** \`${context.payload.inputs.image_tag}\``,
+              `**Triggered by:** @${context.actor}`,
+              `**Commit:** ${context.sha}`,
+              ``,
+              `### Images`,
+              `\`\`\``,
+              `${{ steps.names.outputs.backend }}:${{ inputs.image_tag }}`,
+              `${{ steps.names.outputs.frontend }}:${{ inputs.image_tag }}`,
+              `\`\`\``,
+              ``,
+              `### Deployment`,
+              `> ⚠️  No deployment server is configured. Run the following commands`,
+              `> on your target host to complete the deployment:`,
+              `> \`\`\``,
+              `> export BACKEND_IMAGE_TAG=${{ inputs.image_tag }}`,
+              `> export FRONTEND_IMAGE_TAG=${{ inputs.image_tag }}`,
+              `> docker compose -f infra/docker-compose.prod.yml pull`,
+              `> docker compose -f infra/docker-compose.prod.yml exec backend alembic upgrade head`,
+              `> docker compose -f infra/docker-compose.prod.yml up -d`,
+              `> \`\`\``,
+              ``,
+              ...(context.payload.inputs.release_notes
+                ? [`### Notes`, context.payload.inputs.release_notes]
+                : []),
+            ].join('\n');
+
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `${context.payload.inputs.environment} — ${context.payload.inputs.image_tag}`,
+              body,
+              draft: false,
+              prerelease: context.payload.inputs.environment !== 'production',
+            });
+
+      - name: Print deployment instructions
+        run: |
+          echo "════════════════════════════════════════════════════════"
+          echo "  Release recorded: ${{ inputs.image_tag }} → ${{ inputs.environment }}"
+          echo ""
+          echo "  Images tagged as '${{ inputs.environment }}' in GHCR."
+          echo ""
+          echo "  To deploy, run on your target host:"
+          echo "    export BACKEND_IMAGE_TAG=${{ inputs.image_tag }}"
+          echo "    export FRONTEND_IMAGE_TAG=${{ inputs.image_tag }}"
+          echo "    docker compose -f infra/docker-compose.prod.yml pull"
+          echo "    docker compose -f infra/docker-compose.prod.yml exec backend alembic upgrade head"
+          echo "    docker compose -f infra/docker-compose.prod.yml up -d --no-build"
+          echo ""
+          echo "  Rollback: re-run this workflow with the previous SHA tag."
+          echo "════════════════════════════════════════════════════════"
