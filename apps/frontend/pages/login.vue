@@ -10,6 +10,7 @@
             v-model="email"
             type="email"
             required
+            data-testid="login-email"
             class="w-full border rounded px-3 py-2"
             placeholder="admin@example.com"
           />
@@ -20,6 +21,7 @@
             v-model="password"
             :type="show ? 'text' : 'password'"
             required
+            data-testid="login-password"
             class="w-full border rounded px-3 py-2"
             placeholder="••••••••"
           />
@@ -32,12 +34,13 @@
         <button
           type="submit"
           :disabled="loading"
+          data-testid="login-submit"
           class="w-full bg-black text-white rounded px-4 py-2 disabled:opacity-50"
         >
           {{ loading ? 'Signing in…' : 'Sign in' }}
         </button>
 
-        <p v-if="error" class="text-red-600 text-sm">{{ error }}</p>
+        <p v-if="error" data-testid="login-error" class="text-red-600 text-sm">{{ error }}</p>
       </form>
     </div>
   </div>
