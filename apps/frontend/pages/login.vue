@@ -47,8 +47,8 @@
 </template>
 
 <script setup lang="ts">
-const email = ref('admin@example.com')
-const password = ref('admin123')
+const email = ref('')
+const password = ref('')
 const show = ref(false)
 const loading = ref(false)
 const error = ref<string | null>(null)

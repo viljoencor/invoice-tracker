@@ -37,6 +37,24 @@ const downloadPdf = async () => {
   }
 }
 
+// ---------- Send Invoice ----------
+const sending = ref(false)
+const sendError = ref<string | null>(null)
+async function sendInvoice() {
+  sending.value = true
+  sendError.value = null
+  try {
+    await api.post(`/invoices/${id.value}/send`, {})
+    await refresh()
+  } catch (e: any) {
+    const detail = e?.data?.detail
+    sendError.value =
+      typeof detail === 'string' ? detail : e?.message || 'Failed to send invoice'
+  } finally {
+    sending.value = false
+  }
+}
+
 // ---------- Record Payment ----------
 const paying = ref(false)
 const pay = reactive({
@@ -108,16 +126,37 @@ const payments = computed(() => paymentsData.value ?? [])
     <div v-else-if="error" class="text-sm text-red-600">Failed to load invoice</div>
 
     <div v-else-if="invoice" class="space-y-6">
-      <div class="flex items-center justify-between">
+      <div class="flex items-center justify-between flex-wrap gap-3">
         <h1 class="text-2xl font-semibold">Invoice {{ invoice.number }}</h1>
-        <button
-          @click="downloadPdf"
-          :disabled="downloading"
-          class="px-3 py-2 rounded bg-black text-white disabled:opacity-60"
-        >
-          {{ downloading ? 'Preparing…' : 'Download PDF' }}
-        </button>
+        <div class="flex gap-2">
+          <!-- Send button — only when status is "draft" -->
+          <button
+            v-if="invoice.status === 'draft'"
+            class="px-3 py-2 rounded border border-gray-300 text-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black disabled:opacity-50"
+            :disabled="sending"
+            data-testid="send-invoice-btn"
+            @click="sendInvoice"
+          >
+            {{ sending ? 'Sending…' : 'Mark as Sent' }}
+          </button>
+          <button
+            class="px-3 py-2 rounded bg-black text-white disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-black"
+            :disabled="downloading"
+            data-testid="download-pdf-btn"
+            @click="downloadPdf"
+          >
+            {{ downloading ? 'Preparing…' : 'Download PDF' }}
+          </button>
+        </div>
       </div>
+
+      <!-- Send error -->
+      <div
+        v-if="sendError"
+        class="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700"
+        role="alert"
+        data-testid="send-invoice-error"
+      >{{ sendError }}</div>
 
       <!-- Details -->
       <div class="bg-white p-4 rounded-2xl shadow">
