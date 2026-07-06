@@ -2,22 +2,27 @@ import { computed } from 'vue'
 
 /**
  * Single application-facing auth state abstraction.
- * The token cookie is the source of truth; this composable is the only
- * interface the application should use to read or clear auth state.
  *
- * NOTE (Phase 8): this will be replaced by an HTTP-only cookie + BFF proxy.
+ * Architecture (Phase 8):
+ * - Access and refresh tokens live in httpOnly cookies managed by the Nitro BFF.
+ * - Client JS only reads the `session` indicator cookie (not httpOnly) to know
+ *   whether a session exists without touching the actual tokens.
+ * - logout() calls the BFF which revokes the refresh token and clears all cookies.
  */
 export function useAuth() {
-  const token = useCookie<string | null>('token', { sameSite: 'lax' })
+  // Non-httpOnly indicator set by the BFF on login; cleared on logout.
+  const session = useCookie<string | null>('session', { sameSite: 'lax' })
 
-  /** True when a non-empty token is stored in the session cookie. */
-  const isAuthenticated = computed(() => !!(token.value ?? '').trim())
+  /** True when the BFF has established an authenticated session. */
+  const isAuthenticated = computed(() => session.value === '1')
 
-  /** Clear the session token and redirect to the login page. */
+  /** Revoke the server-side session and redirect to the login page. */
   async function logout() {
-    token.value = null
+    try {
+      await $fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+    } catch { /* ignore — BFF-side cookies are cleared regardless */ }
     await navigateTo('/login')
   }
 
-  return { token, isAuthenticated, logout }
+  return { isAuthenticated, logout }
 }

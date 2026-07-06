@@ -15,8 +15,12 @@ export default defineNuxtConfig({
   },
 
   runtimeConfig: {
+    // PRIVATE — only accessible in Nitro server routes (BFF proxy).
+    // Never exposed to browser JavaScript.
+    apiBase: process.env.NUXT_API_BASE || 'http://127.0.0.1:8000/api/v1',
     public: {
-      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://127.0.0.1:8000/api/v1',
+      // All API traffic flows through the BFF proxy (/api/proxy/*) so no
+      // backend URL needs to be public.
     },
   },
   app: {

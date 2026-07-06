@@ -16,14 +16,14 @@ describe('auth middleware', () => {
     expect(mockNavigateTo).toHaveBeenCalledWith('/login')
   })
 
-  it('redirects to / when token is present and route is /login', () => {
-    mockToken.value = 'valid-jwt'
+  it('redirects to / when session cookie is "1" and route is /login', () => {
+    mockToken.value = '1'
     authMiddleware({ path: '/login' } as any, {} as any)
     expect(mockNavigateTo).toHaveBeenCalledWith('/')
   })
 
-  it('does not redirect when token is present on a protected route', () => {
-    mockToken.value = 'valid-jwt'
+  it('does not redirect when session cookie is "1" on a protected route', () => {
+    mockToken.value = '1'
     const result = authMiddleware({ path: '/invoices' } as any, {} as any)
     expect(result).toBeUndefined()
     expect(mockNavigateTo).not.toHaveBeenCalled()

@@ -54,7 +54,7 @@ services:
       context: ../apps/frontend
       target: development
     environment:
-      NUXT_PUBLIC_API_BASE: http://localhost:8000
+      NUXT_API_BASE: http://backend:8000/api/v1
       NODE_ENV: development
     depends_on:
       backend:

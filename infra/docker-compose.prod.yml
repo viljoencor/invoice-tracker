@@ -76,7 +76,7 @@ services:
       context: ../apps/frontend
       target: production
     environment:
-      NUXT_PUBLIC_API_BASE: ${FRONTEND_API_BASE}
+      NUXT_API_BASE: ${FRONTEND_API_BASE:-http://backend:8000/api/v1}
       NODE_ENV: production
     depends_on:
       backend:

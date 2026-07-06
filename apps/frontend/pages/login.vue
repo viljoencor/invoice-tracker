@@ -53,23 +53,20 @@ const show = ref(false)
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-const tokenCookie = useCookie<string | null>('token', { sameSite: 'lax' })
-const api = useApi()
-
 async function onSubmit() {
   loading.value = true
   error.value = null
   try {
-    // Backend returns { access_token, token_type: "bearer" }
-    const res = await api.post('/auth/login', { email: email.value, password: password.value })
-    const { access_token } = res as any
-
-    // Store ONLY the raw JWT; the composable adds "Bearer " properly
-    tokenCookie.value = access_token
-
-    await navigateTo('/') // dashboard lives at "/"
+    // BFF sets httpOnly cookies — no token handling in client code
+    await $fetch('/api/auth/login', {
+      method: 'POST',
+      body: { email: email.value, password: password.value },
+      credentials: 'include',
+    })
+    await navigateTo('/')
   } catch (e: any) {
     error.value =
+      e?.data?.message ||
       e?.data?.detail?.message ||
       e?.data?.detail ||
       e?.message ||

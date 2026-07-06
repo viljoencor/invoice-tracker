@@ -11,7 +11,8 @@ FROM ghcr.io/astral-sh/uv:python3.12-bookworm AS deps
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 # --frozen enforces the lock file; --no-dev omits test/lint tools
-RUN uv sync --frozen --no-dev
+#RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev --no-install-project
 
 # ── Stage 2: assemble only the runtime files needed in the container ─────────
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm AS build

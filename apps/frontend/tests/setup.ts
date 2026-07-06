@@ -42,16 +42,15 @@ vi.stubGlobal('useAsyncData', vi.fn().mockResolvedValue({
   error: ref(null),
 }))
 
-// $fetch with .create method
-const $fetchMock = Object.assign(vi.fn(), { create: mockFetchCreate })
+// $fetch with .create method — exported for test assertions
+export const $fetchMock = Object.assign(vi.fn(), { create: mockFetchCreate })
 vi.stubGlobal('$fetch', $fetchMock)
 
 // ── Per-test reset ────────────────────────────────────────────────────────────
 beforeEach(() => {
   mockToken.value = null
   vi.clearAllMocks()
-  // Restore create() implementation after clearAllMocks (safe — clearAllMocks
-  // only wipes call history, not factory-provided implementations, but we
-  // re-apply to be explicit).
+  // Restore create() and direct call implementations after clearAllMocks.
   mockFetchCreate.mockReturnValue(mockFetchClient)
+  $fetchMock.mockResolvedValue({ ok: true })
 })

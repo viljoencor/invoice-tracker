@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mockToken, mockNavigateTo, mockFetchCreate, mockFetchClient } from '../../setup'
+import { mockNavigateTo, mockFetchCreate, mockFetchClient } from '../../setup'
 import { useApi } from '../../../composables/useApi'
 
 describe('useApi', () => {
@@ -12,9 +12,14 @@ describe('useApi', () => {
     })
   })
 
-  it('passes apiBase as baseURL to $fetch.create', () => {
+  it('uses /api/proxy as baseURL (same-origin BFF)', () => {
     useApi()
-    expect(capturedOptions.baseURL).toBe('http://localhost:8000/api/v1')
+    expect(capturedOptions.baseURL).toBe('/api/proxy')
+  })
+
+  it('sends credentials:include so httpOnly cookies are forwarded', () => {
+    useApi()
+    expect(capturedOptions.credentials).toBe('include')
   })
 
   it('returns get / post / patch / del / getArrayBuffer / getBlob helpers', () => {
@@ -47,61 +52,15 @@ describe('useApi', () => {
     )
   })
 
-  it('sets Authorization header when token is set', () => {
-    mockToken.value = 'jwt-abc123'
+  it('navigates to /login on 401 response from proxy', async () => {
     useApi()
-
-    const options = { headers: new Headers() }
-    capturedOptions.onRequest({ options })
-
-    expect((options.headers as Headers).get('Authorization')).toBe('Bearer jwt-abc123')
-  })
-
-  it('strips existing "Bearer " prefix before setting Authorization header', () => {
-    mockToken.value = 'Bearer already-prefixed'
-    useApi()
-
-    const options = { headers: new Headers() }
-    capturedOptions.onRequest({ options })
-
-    expect((options.headers as Headers).get('Authorization')).toBe('Bearer already-prefixed')
-  })
-
-  it('omits Authorization header when no token', () => {
-    mockToken.value = null
-    useApi()
-
-    const options = { headers: new Headers() }
-    capturedOptions.onRequest({ options })
-
-    expect((options.headers as Headers).has('Authorization')).toBe(false)
-  })
-
-  it('omits Authorization header when token is empty string', () => {
-    mockToken.value = ''
-    useApi()
-
-    const options = { headers: new Headers() }
-    capturedOptions.onRequest({ options })
-
-    expect((options.headers as Headers).has('Authorization')).toBe(false)
-  })
-
-  it('clears token and navigates to /login on 401 response', async () => {
-    mockToken.value = 'old-token'
-    useApi()
-
     await capturedOptions.onResponseError({ response: { status: 401 } })
-
-    expect(mockToken.value).toBeNull()
     expect(mockNavigateTo).toHaveBeenCalledWith('/login')
   })
 
   it('does not navigate on non-401 error responses', async () => {
     useApi()
-
     await capturedOptions.onResponseError({ response: { status: 500 } })
-
     expect(mockNavigateTo).not.toHaveBeenCalled()
   })
 

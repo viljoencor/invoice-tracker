@@ -12,7 +12,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
-      include: ['composables/**', 'components/**', 'middleware/**', 'stores/**'],
+      include: ['composables/**', 'components/**', 'middleware/**', 'stores/**', 'server/utils/**'],
       thresholds: {
         lines: 50,
         functions: 50,

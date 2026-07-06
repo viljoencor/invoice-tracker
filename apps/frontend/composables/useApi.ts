@@ -1,37 +1,13 @@
 // apps/frontend/composables/useApi.ts
+// All API traffic goes through the Nitro BFF proxy at /api/proxy/*.
+// httpOnly cookies carry the tokens — no client-side token management here.
 export function useApi() {
-  const { public: { apiBase } } = useRuntimeConfig()
-
-  const configured = (apiBase || '').trim()
-  const baseCandidate = configured !== '' ? configured : 'http://localhost:8000/api/v1'
-  let base = baseCandidate.replace(/\/+$/, '')
-  if (!/\/api\/v\d+$/.test(base)) base = `${base}/api/v1`
-
-  if (process.dev) {
-    // eslint-disable-next-line no-console
-    console.log('[useApi] baseURL =', base)
-  }
-
-  const tokenCookie = useCookie<string | null>('token', { sameSite: 'lax' })
-
   const client = $fetch.create({
-    baseURL: base,
-    credentials: 'omit',
-    onRequest({ options }) {
-      const headers = new Headers(options.headers as any)
-      if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
-
-      const raw = (tokenCookie.value ?? '').trim()
-      const jwt = raw.replace(/^bearer\s+/i, '').trim()
-      if (jwt) headers.set('Authorization', `Bearer ${jwt}`)
-
-      options.headers = headers
-    },
+    baseURL: '/api/proxy',
+    credentials: 'include', // send httpOnly session cookies
     onResponseError({ response }) {
-      if (response.status === 401) {
-        tokenCookie.value = null
-        void navigateTo('/login')
-      }
+      // Proxy returns 401 when both access and refresh tokens are exhausted
+      if (response.status === 401) void navigateTo('/login')
     },
   })
 
