@@ -6,13 +6,14 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.exc import SQLAlchemyError
 
 from .config import settings
 from .db import engine, verify_db_connection
 from .logging_config import get_logger
-from .middleware import TraceIdMiddleware, limiter
+from .middleware import TimeoutMiddleware, TraceIdMiddleware, limiter
 from .routers import auth, clients, dash, invoices, payments
 
 logger = get_logger(__name__)
@@ -48,6 +49,17 @@ app = FastAPI(
 
 # Add rate limiter state
 app.state.limiter = limiter
+
+# Prometheus metrics — exposed at /metrics (excluded from OpenAPI schema).
+# IMPORTANT: restrict /metrics access at the network or reverse-proxy layer
+# in production so it is never reachable from the public internet.
+_instrumentator = Instrumentator(
+    should_group_status_codes=False,
+    should_ignore_untemplated=True,
+    should_instrument_requests_inprogress=True,
+    excluded_handlers=["/metrics", "/healthz", "/readiness"],
+)
+_instrumentator.instrument(app).expose(app, include_in_schema=False)
 
 
 @app.exception_handler(Exception)
@@ -147,6 +159,7 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRe
 
 
 app.add_middleware(TraceIdMiddleware)
+app.add_middleware(TimeoutMiddleware, timeout=settings.request_timeout_seconds)
 
 # CORS config
 ALLOWED_ORIGINS = [

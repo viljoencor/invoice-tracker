@@ -20,6 +20,7 @@ services:
   backend:
     build:
       context: ../apps/backend
+      target: production
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:${DB_PASSWORD}@db:5432/invoicer_staging
       ENVIRONMENT: staging

@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     db_pool_recycle: int = Field(default=3600, ge=300)  # seconds
     db_pool_pre_ping: bool = True
 
+    # Application request timeout (seconds). Enforced by TimeoutMiddleware.
+    # Set slightly below the reverse-proxy proxy_read_timeout to avoid connection
+    # resets before the application can return a clean 504.
+    request_timeout_seconds: int = Field(default=55, ge=5, le=300)
+
     # Database startup retry
     db_startup_retry_attempts: int = Field(default=5, ge=1, le=20)
     db_startup_retry_max_wait: int = Field(default=10, ge=1, le=60)

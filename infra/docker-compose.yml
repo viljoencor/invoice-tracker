@@ -19,6 +19,7 @@ services:
   backend:
     build:
       context: ../apps/backend
+      target: development
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/invoicer
       ENVIRONMENT: development
@@ -34,6 +35,7 @@ services:
       LOG_JSON_FORMAT: false
     volumes:
       - ../apps/backend/migrations:/app/migrations
+      - ../apps/backend/app:/app/app
     depends_on:
       db:
         condition: service_healthy
