@@ -52,8 +52,8 @@ const statuses: Record<string, string> = {
       <div class="mt-8 flex flex-col">
         <div class="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
           <div class="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-            <div v-if="pending" class="text-sm text-gray-500">Loading…</div>
-            <div v-else-if="error" class="text-sm text-red-600">Failed to load invoices</div>
+            <div v-if="pending" class="text-sm text-gray-500" data-testid="invoices-loading">Loading…</div>
+            <div v-else-if="error" class="text-sm text-red-600" data-testid="invoices-error">Failed to load invoices</div>
 
             <div v-else class="overflow-hidden shadow ring-1 ring-black/5 md:rounded-lg">
               <table class="min-w-full divide-y divide-gray-300">
@@ -71,7 +71,7 @@ const statuses: Record<string, string> = {
 
                 <tbody class="divide-y divide-gray-200 bg-white">
                   <!-- iterate over invoices (auto-unwrapped ref) -->
-                  <tr v-for="invoice in invoices" :key="invoice.id">
+                  <tr v-for="invoice in invoices" :key="invoice.id" :data-testid="`invoice-row-${invoice.id}`">
                     <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-blue-600 hover:text-blue-900 sm:pl-6">
                       <NuxtLink :to="`/invoices/${invoice.id}`">{{ invoice.number }}</NuxtLink>
                     </td>

@@ -122,8 +122,8 @@ const payments = computed(() => paymentsData.value ?? [])
 
 <template>
   <div class="p-6 space-y-6">
-    <div v-if="pending" class="text-sm text-gray-500">Loading…</div>
-    <div v-else-if="error" class="text-sm text-red-600">Failed to load invoice</div>
+    <div v-if="pending" class="text-sm text-gray-500" data-testid="invoice-loading">Loading…</div>
+    <div v-else-if="error" class="text-sm text-red-600" data-testid="invoice-load-error">Failed to load invoice</div>
 
     <div v-else-if="invoice" class="space-y-6">
       <div class="flex items-center justify-between flex-wrap gap-3">
@@ -202,7 +202,7 @@ const payments = computed(() => paymentsData.value ?? [])
       <div class="bg-white p-4 rounded-2xl shadow space-y-3">
         <h2 class="text-lg font-semibold">Record Payment</h2>
 
-        <div v-if="payError" class="text-sm text-red-600">{{ payError }}</div>
+        <div v-if="payError" class="text-sm text-red-600" role="alert" data-testid="pay-error">{{ payError }}</div>
 
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div>
@@ -235,6 +235,7 @@ const payments = computed(() => paymentsData.value ?? [])
             @click="recordPayment"
             :disabled="paying"
             class="px-3 py-2 rounded bg-blue-600 text-white disabled:opacity-60"
+            data-testid="save-payment-btn"
           >
             {{ paying ? 'Saving…' : 'Save Payment' }}
           </button>
@@ -245,7 +246,7 @@ const payments = computed(() => paymentsData.value ?? [])
       <div class="bg-white p-4 rounded-2xl shadow" v-if="payments.length">
         <h2 class="text-lg font-semibold mb-2">Payments</h2>
         <ul class="divide-y">
-          <li v-for="p in payments" :key="p.id" class="py-2 flex items-center justify-between">
+          <li v-for="p in payments" :key="p.id" class="py-2 flex items-center justify-between" :data-testid="`payment-row-${p.id}`">
             <div class="text-sm text-gray-700">
               {{ p.received_at }} · {{ p.method || '—' }} · {{ p.reference || '' }}
             </div>
