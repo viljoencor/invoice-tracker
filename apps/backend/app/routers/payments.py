@@ -26,6 +26,14 @@ async def apply_payment(
     idemp_std: str | None = Header(default=None, alias="Idempotency-Key"),
     idemp_alt: str | None = Header(default=None, alias="idempotency-key"),
 ):
+    # Idempotency key + row lock prevents double-charging when clients retry a failed request.
+    # Step 1: Require idempotency key; 
+    # Step 2: Pre-check for duplicate; 
+    # Step 3: Lock invoice row (Postgres only); 
+    # Step 4: Re-check inside lock; 
+    # Step 5: Validate amount; 
+    # Step 6: Insert payment + deduct balance + update status; 
+    # Step 7: Handle race via unique constraint fallback.
     org_id = claims["org_id"]
     x_idempotency_key = idemp_std or idemp_alt
     if not x_idempotency_key:
@@ -120,6 +128,9 @@ async def list_payments(
     claims=Depends(get_current_claims),
     db: AsyncSession = Depends(get_db),
 ):
+    # Returns payment history scoped to one invoice so the detail view can show a full audit trail.
+    # Step 1: Verify invoice belongs to org; 
+    # Step 2: Return payments ordered newest-first.
     org_id = claims["org_id"]
     inv = (
         await db.execute(

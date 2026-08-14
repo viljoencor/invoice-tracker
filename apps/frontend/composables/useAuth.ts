@@ -14,9 +14,11 @@ export function useAuth() {
   const session = useCookie<string | null>('session', { sameSite: 'lax' })
 
   /** True when the BFF has established an authenticated session. */
+  // Reads the non-httpOnly `session` cookie so client JS can react to auth state without touching real tokens.
   const isAuthenticated = computed(() => session.value === '1')
 
   /** Revoke the server-side session and redirect to the login page. */
+  // Calls BFF to revoke the refresh token before navigating, ensuring the server record is cleaned up.
   async function logout() {
     try {
       await $fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })

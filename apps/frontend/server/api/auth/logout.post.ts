@@ -3,6 +3,10 @@ import { clearAuthCookies } from '../../utils/cookies'
 import { getBackendBase } from '../../utils/backend'
 
 export default defineEventHandler(async (event) => {
+  // BFF logout: always clears cookies locally even if the backend is unavailable, so the browser session always ends.
+  // Step 1: Read refresh token cookie; 
+  // Step 2: Best-effort revocation on backend;
+  // Step 3: Clear all auth cookies locally so the browser session always ends.
   const rt = getCookie(event, 'rt')
   const base = getBackendBase()
 

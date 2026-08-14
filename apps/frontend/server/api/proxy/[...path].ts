@@ -20,7 +20,9 @@ const ALLOWED_PREFIXES = [
   '/auth/me',
 ]
 
+/** Returns true when the upstream path is on the explicit allow-list (no open proxy). */
 function isAllowedPath(path: string): boolean {
+  // Step 1: Match exact prefix, prefix + slash, or prefix + query string.
   return ALLOWED_PREFIXES.some(
     (prefix) =>
       path === prefix ||
@@ -41,8 +43,18 @@ const FORWARD_RESPONSE_HEADERS = [
 
 type UpstreamResponse = { _data: unknown; status: number; headers: Headers }
 
+/**
+ * Forward a single request to the FastAPI backend.
+ * Step 1: Build auth + extra headers; 
+ * Step 2: Attach body for non-GET; 
+ * Step 3: Set arrayBuffer mode for PDF;
+ * Step 4: Execute $fetch.raw; 
+ * Step 5: Return status, headers, and data.
+ */
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS' | 'CONNECT' | 'TRACE'
+
 async function callUpstream(
-  method: string,
+  method: HttpMethod,
   url: string,
   accessToken: string,
   body: unknown,
@@ -55,11 +67,11 @@ async function callUpstream(
   }
 
   const fetchOpts: {
-    method: string
+    method: HttpMethod
     headers: Record<string, string>
     signal: AbortSignal
     ignoreResponseError: boolean
-    body?: unknown
+    body?: Record<string, any> | BodyInit | null
     responseType?: 'arrayBuffer'
   } = {
     method,
@@ -70,7 +82,7 @@ async function callUpstream(
   }
 
   if (body !== undefined && !['GET', 'HEAD', 'DELETE'].includes(method.toUpperCase())) {
-    fetchOpts.body = body
+    fetchOpts.body = body as Record<string, any> | BodyInit | null
     headers['Content-Type'] = 'application/json'
   }
 
@@ -107,7 +119,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, message: 'Not authenticated' })
   }
 
-  const method = getMethod(event)
+  const method = getMethod(event) as HttpMethod
   const isPdf = upstreamPath.endsWith('/pdf')
 
   // ── 3. Collect safe headers to forward; generate trace ID if absent ──────

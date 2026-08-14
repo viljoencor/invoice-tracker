@@ -23,6 +23,10 @@ API_PREFIX = "/api/v1"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # noqa: ARG001
+    # Runs startup/shutdown hooks (DB health check, engine dispose) without blocking the event loop.
+    # Step 1: Verify DB reachability; 
+    # Step 2: Yield (app serves requests); 
+    # Step 3: Dispose engine on shutdown.
     logger.info("Starting application", environment=settings.environment)
 
     try:
@@ -64,6 +68,9 @@ _instrumentator.instrument(app).expose(app, include_in_schema=False)
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    # Prevents raw Python tracebacks from leaking in production responses.
+    # Step 1: Log error with path/method; 
+    # Step 2: Return sanitised 500 in prod or detailed trace in dev.
     logger.error(
         "Unhandled exception",
         exc_info=exc,
@@ -94,6 +101,9 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 @app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError) -> JSONResponse:
+    # Translates DB errors into a consistent JSON shape without exposing internal query details.
+    # Step 1: Log DB error with path/method; 
+    # Step 2: Return sanitised 500 or detailed message.
     logger.error(
         "Database error",
         exc_info=exc,
@@ -123,6 +133,9 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError) -
 async def validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
+    # Returns field-level errors as structured JSON so the frontend can map them onto form fields.
+    # Step 1: Log field-level validation errors; 
+    # Step 2: Return 422 with structured error list.
     logger.warning(
         "Validation error",
         errors=exc.errors(),
@@ -142,6 +155,9 @@ async def validation_exception_handler(
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:  # noqa: ARG001
+    # Returns 429 with a readable message when a client exceeds the per-minute request budget.
+    # Step 1: Log client IP and path; 
+    # Step 2: Return 429 with retry guidance.
     logger.warning(
         "Rate limit exceeded",
         path=request.url.path,
