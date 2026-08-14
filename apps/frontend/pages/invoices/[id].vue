@@ -98,9 +98,10 @@ async function recordPayment() {
       { headers: { 'Idempotency-Key': idem } }
     )
 
-    // reset amount field; refresh invoice details
+    // reset amount field; refresh invoice details and invalidate cross-page caches
     pay.amount_rands = ''
     await refresh()
+    await refreshNuxtData(['invoices', 'dash-summary'])
   } catch (e: any) {
     // surface backend error message if available
     const msg = e?.data?.detail || e?.message || 'Payment failed'

@@ -123,3 +123,22 @@ class InvoiceSummary(BaseModel):
     paid_last_30d_cents: int
     upcoming_due_cents: int
     revenue_by_month: list[dict]  # [{ month: "YYYY-MM", total_cents: int, count: int }]
+
+
+# --- Dashboard ---
+class RevenueMonth(BaseModel):
+    month: str  # "YYYY-MM"
+    total_cents: int
+    count: int
+
+
+class DashboardSummaryOut(BaseModel):
+    total_billed_cents: int
+    total_due_cents: int
+    overdue_count: int
+    pending_count: int
+    bkt_0_30: int | None = None
+    bkt_31_60: int | None = None
+    bkt_61_90: int | None = None
+    bkt_90p: int | None = None
+    revenue_by_month: list[RevenueMonth]

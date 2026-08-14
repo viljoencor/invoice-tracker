@@ -108,6 +108,8 @@ class Client(Base):
         TIMESTAMP(timezone=True), server_default=func.now()
     )
 
+    __table_args__ = (Index("idx_clients_org", "org_id"),)
+
 
 class Invoice(Base):
     __tablename__ = "invoices"

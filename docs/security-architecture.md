@@ -187,3 +187,17 @@ The static deployment does **not** make the backend insecure in isolation — JW
 | `Referrer-Policy` | nuxt-security (Nitro) | `strict-origin-when-cross-origin` |
 | `Permissions-Policy` | nuxt-security (Nitro) | geolocation, camera, microphone all blocked |
 | `X-XSS-Protection` | **nobody** | Deprecated; removed from all major browsers; `1; mode=block` can create reflected XSS vectors on legacy engines |
+
+---
+
+## Content Security Policy — Known Trade-offs
+
+### `style-src 'unsafe-inline'`
+
+The CSP includes `'unsafe-inline'` in `style-src`. This is a deliberate and documented trade-off:
+
+**Reason:** Tailwind CSS uses a JIT (Just-In-Time) compiler that injects `<style>` elements at build time and runtime. These dynamic inline styles cannot be pre-hashed because their content is generated at build time per-page, not statically known at server startup.
+
+**Why nonces do not help:** Nonces require SSR (server-side rendering) to inject a unique per-request value into the HTML. This application uses `ssr: false` (a Nitro-served SPA) so there is no per-request HTML rendering. The `nonce: false` setting in `nuxt.config.ts` documents this.
+
+**Mitigation:** `unsafe-inline` applies only to `style-src`. `script-src` does **not** include `unsafe-inline` — script content is controlled via build-time SHA-256 hashes (`ssg.hashScripts: true`). The primary XSS vector (script injection) is therefore still blocked by CSP. Inline style injection is a lower-severity risk: it can enable clickjacking-style visual deception but cannot execute JavaScript.

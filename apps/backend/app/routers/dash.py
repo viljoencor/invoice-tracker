@@ -4,12 +4,13 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_db
+from ..schemas import DashboardSummaryOut
 from ..security import get_current_claims
 
 router = APIRouter(prefix="/dash", tags=["dashboard"])
 
 
-@router.get("/summary")
+@router.get("/summary", response_model=DashboardSummaryOut)
 async def summary(claims=Depends(get_current_claims), db: AsyncSession = Depends(get_db)):
     org_id = claims["org_id"]
 

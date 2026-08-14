@@ -3,7 +3,7 @@ import uuid
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import desc, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,7 +42,7 @@ def _to_cents(x: Decimal) -> int:
 
 
 def calc_totals(items: list) -> tuple[int, int, int]:
-    # took forever to get the rounding right here
+    # Accumulate in Decimal then round once per bucket to avoid floating-point drift
     subtotal = Decimal(0)
     tax = Decimal(0)
     for it in items:
@@ -59,7 +59,8 @@ def calc_totals(items: list) -> tuple[int, int, int]:
 
 
 async def next_invoice_number(db: AsyncSession, org_id: uuid.UUID, year: int) -> str:
-    # TODO: this might have race conditions under high load, need to test
+    # INSERT ... ON CONFLICT DO UPDATE ... RETURNING is a single atomic operation;
+    # PostgreSQL guarantees next_seq increments exactly once per call with no race.
     sql = text(
         """
         INSERT INTO invoice_seq (org_id, next_seq)
@@ -74,7 +75,7 @@ async def next_invoice_number(db: AsyncSession, org_id: uuid.UUID, year: int) ->
     return f"INV-{year}-{next_seq:05d}"
 
 
-@router.post("", response_model=InvoiceOut)
+@router.post("", response_model=InvoiceOut, status_code=status.HTTP_201_CREATED)
 async def create_invoice(
     body: InvoiceCreate,
     claims: dict = Depends(require_role("OWNER")),

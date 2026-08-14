@@ -63,8 +63,9 @@ export default defineNuxtConfig({
     // Never exposed to browser JavaScript.
     apiBase: process.env.NUXT_API_BASE || 'http://127.0.0.1:8000/api/v1',
     public: {
-      // All API traffic flows through the BFF proxy (/api/proxy/*) so no
-      // backend URL needs to be public.
+      // Set NUXT_PUBLIC_ERROR_TRACKING_DSN to enable client-side error reporting.
+      // See plugins/error-tracking.client.ts for integration instructions.
+      errorTrackingDsn: process.env.NUXT_PUBLIC_ERROR_TRACKING_DSN || '',
     },
   },
   app: {

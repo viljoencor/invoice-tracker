@@ -12,7 +12,7 @@ from httpx import AsyncClient
 async def _create_and_send_invoice(client: AsyncClient, mock_invoice_data: dict) -> tuple:
     """Create an invoice via the API, mark it sent, return (invoice_id, total_cents)."""
     resp = await client.post("/api/v1/invoices", json=mock_invoice_data)
-    assert resp.status_code == 200, resp.text
+    assert resp.status_code == 201, resp.text
     data = resp.json()
     invoice_id = data["id"]
     total_cents = data["total_cents"]

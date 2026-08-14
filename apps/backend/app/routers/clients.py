@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +13,7 @@ from ..security import get_current_claims, require_role
 router = APIRouter(prefix="/clients", tags=["clients"])
 
 
-@router.post("", response_model=ClientOut)
+@router.post("", response_model=ClientOut, status_code=status.HTTP_201_CREATED)
 async def create_client(
     body: ClientIn,
     claims: dict = Depends(require_role("OWNER")),

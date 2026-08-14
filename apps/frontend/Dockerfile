@@ -3,7 +3,7 @@ FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci --no-audit --no-fund
+    npm ci --no-fund
 
 # ── Stage 2: Build the Nuxt app ───────────────────────────────────────────────
 FROM deps AS build

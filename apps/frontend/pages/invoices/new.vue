@@ -95,9 +95,12 @@ const invoiceSchema = z
   })
 
 const formErrors = ref<Record<string, string>>({})
+const submitting = ref(false)
+const submitError = ref<string | null>(null)
 
 async function submit() {
   formErrors.value = {}
+  submitError.value = null
   const result = invoiceSchema.safeParse(form)
   if (!result.success) {
     const errs: Record<string, string> = {}
@@ -108,8 +111,16 @@ async function submit() {
     formErrors.value = errs
     return
   }
-  const inv = await post<{ id: string }>('/invoices', form)
-  navigateTo(`/invoices/${inv.id}`)
+  submitting.value = true
+  try {
+    const inv = await post<{ id: string }>('/invoices', form)
+    navigateTo(`/invoices/${inv.id}`)
+  } catch (e: any) {
+    const detail = e?.data?.detail
+    submitError.value = typeof detail === 'string' ? detail : e?.message || 'Failed to create invoice'
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -287,13 +298,14 @@ async function submit() {
         <button
           type="button"
           @click="submit"
-          :disabled="!canSubmit"
+          :disabled="submitting || !canSubmit"
           class="px-4 py-2 rounded bg-black text-white disabled:opacity-50"
           data-testid="invoice-submit"
         >
-          Create Invoice
+          {{ submitting ? 'Creating…' : 'Create Invoice' }}
         </button>
-        <span v-if="formErrors['items']" class="text-xs text-red-600" data-testid="items-error">{{ formErrors['items'] }}</span>
+        <span v-if="submitError" class="text-xs text-red-600" data-testid="submit-error">{{ submitError }}</span>
+        <span v-else-if="formErrors['items']" class="text-xs text-red-600" data-testid="items-error">{{ formErrors['items'] }}</span>
         <span v-else-if="!canSubmit" class="text-xs text-gray-500">
           Complete required fields to enable “Create Invoice”.
         </span>

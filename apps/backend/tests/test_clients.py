@@ -19,7 +19,7 @@ class TestClients:
             },
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 201
         data = response.json()
         assert data["name"] == "New Client Corp"
         assert data["email"] == "contact@newclient.com"
@@ -62,7 +62,7 @@ class TestClients:
             json={"name": "Minimal Client"},
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 201
         data = response.json()
         assert data["name"] == "Minimal Client"
         assert data["email"] is None

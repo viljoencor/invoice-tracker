@@ -38,7 +38,7 @@ class TestInvoiceRBAC:
     ):
         """OWNER creates invoice, MEMBER cannot mark it sent."""
         create_resp = await authenticated_client.post("/api/v1/invoices", json=mock_invoice_data)
-        assert create_resp.status_code == 200
+        assert create_resp.status_code == 201
         invoice_id = create_resp.json()["id"]
 
         resp = await member_authenticated_client.post(f"/api/v1/invoices/{invoice_id}/send")

@@ -30,7 +30,7 @@ function isAllowedPath(path: string): boolean {
 }
 
 /** Headers from the browser request that are safe to forward upstream. */
-const FORWARD_REQUEST_HEADERS = ['idempotency-key', 'x-trace-id', 'x-request-id']
+const FORWARD_REQUEST_HEADERS = ['idempotency-key', 'x-request-id']
 
 /** Headers from the upstream response that are safe to return to the browser. */
 const FORWARD_RESPONSE_HEADERS = [
@@ -39,6 +39,8 @@ const FORWARD_RESPONSE_HEADERS = [
   'x-trace-id',
 ]
 
+type UpstreamResponse = { _data: unknown; status: number; headers: Headers }
+
 async function callUpstream(
   method: string,
   url: string,
@@ -46,13 +48,20 @@ async function callUpstream(
   body: unknown,
   extraHeaders: Record<string, string>,
   isPdf: boolean,
-): Promise<{ _data: unknown; status: number; headers: Headers }> {
+): Promise<UpstreamResponse> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${accessToken}`,
     ...extraHeaders,
   }
 
-  const fetchOpts: Record<string, unknown> = {
+  const fetchOpts: {
+    method: string
+    headers: Record<string, string>
+    signal: AbortSignal
+    ignoreResponseError: boolean
+    body?: unknown
+    responseType?: 'arrayBuffer'
+  } = {
     method,
     headers,
     signal: AbortSignal.timeout(30_000),
@@ -69,7 +78,8 @@ async function callUpstream(
     fetchOpts.responseType = 'arrayBuffer'
   }
 
-  return $fetch.raw(url, fetchOpts as any) as any
+  const response = await $fetch.raw<unknown>(url, fetchOpts)
+  return { _data: response._data, status: response.status, headers: response.headers }
 }
 
 export default defineEventHandler(async (event) => {
@@ -100,12 +110,14 @@ export default defineEventHandler(async (event) => {
   const method = getMethod(event)
   const isPdf = upstreamPath.endsWith('/pdf')
 
-  // ── 3. Collect safe headers to forward ───────────────────────────────────
+  // ── 3. Collect safe headers to forward; generate trace ID if absent ──────
   const extraHeaders: Record<string, string> = {}
   for (const h of FORWARD_REQUEST_HEADERS) {
     const val = getHeader(event, h)
     if (val) extraHeaders[h] = val
   }
+  // Forward browser trace ID or generate one so every upstream call is correlated
+  extraHeaders['x-trace-id'] = getHeader(event, 'x-trace-id') || crypto.randomUUID()
 
   // ── 4. Read body for state-changing methods ───────────────────────────────
   let body: unknown

@@ -31,12 +31,6 @@ const { data: recentInvoicesData } = await useAsyncData<InvoiceList[]>(
   { default: (): InvoiceList[] => [] },
 )
 
-const { data: invoicesAllMini } = await useAsyncData<InvoiceList[]>(
-  'invoices-mini',
-  () => api.get<InvoiceList[]>('/invoices', { params: { limit: 500, sort: '-issue_date' } }),
-  { default: (): InvoiceList[] => [] },
-)
-
 const summary = computed(() => summaryData.value!)
 const recentInvoices = computed(() => recentInvoicesData.value ?? [])
 
@@ -47,10 +41,7 @@ const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('en-ZA', { mo
 /* KPI values */
 const outstandingCents = computed(() => Number(summary.value.total_due_cents ?? 0))
 const overdueCount = computed(() => Number(summary.value.overdue_count ?? 0))
-const pendingCount = computed(() => {
-  const rows = invoicesAllMini.value ?? []
-  return rows.filter(r => ['draft', 'sent', 'partially_paid'].includes(String(r.status || '').toLowerCase())).length
-})
+const pendingCount = computed(() => Number(summary.value.pending_count ?? 0))
 
 /* Billed trend chip */
 type RevRow = { month: string; total_cents: number; count?: number }

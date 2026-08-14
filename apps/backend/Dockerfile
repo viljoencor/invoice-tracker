@@ -39,7 +39,11 @@ USER appuser
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')" \
     || exit 1
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# WEB_CONCURRENCY controls the number of uvicorn worker processes.
+# Set to 1 for single-CPU containers; scale up proportionally with CPU cores
+# and remember to multiply DB_POOL_SIZE by the number of workers.
+ENV WEB_CONCURRENCY=2
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${WEB_CONCURRENCY}"]
 
 # ── Stage 4: development (hot reload, root user for bind-mount compatibility) ─
 FROM production AS development
