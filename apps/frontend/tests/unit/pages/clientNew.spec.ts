@@ -42,8 +42,8 @@ describe('pages/clients/new.vue', () => {
     await wrapper.find('input#client-name').setValue('Acme')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
-    await flushPromises()
-    await flushPromises()
-    expect(mockNavigateTo).toHaveBeenCalledWith('/clients')
+    await vi.waitFor(() => {
+      expect(mockNavigateTo).toHaveBeenCalledWith('/clients')
+    }, { timeout: 3000 })
   })
 })
