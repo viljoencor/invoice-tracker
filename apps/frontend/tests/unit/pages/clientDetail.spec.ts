@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { ref, defineComponent, h, Suspense } from 'vue'
+import { ref, defineComponent, h, Suspense, nextTick } from 'vue'
 import { mockFetchClient, mockNavigateTo } from '../../setup'
 
 // Dynamic import to avoid Vite glob expansion on [id] brackets
@@ -99,6 +99,7 @@ describe('pages/clients/[id].vue � client detail', () => {
     await flushPromises()
     await flushPromises()
     await flushPromises()
+    await nextTick()
     expect(wrapper.find('[data-testid="client-edit-name-error"]').exists()).toBe(true)
   })
 
