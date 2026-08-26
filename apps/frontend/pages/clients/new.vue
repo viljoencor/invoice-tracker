@@ -11,7 +11,9 @@ const clientSchema = toTypedSchema(
   z.object({
     name: z.string().min(1, 'Client name is required'),
     email: z
-      .union([z.string().email('Invalid email format'), z.literal('')])
+      .string()
+      // refine keeps a single ZodError path so @vee-validate/zod maps it to errors.email correctly.
+      .refine((v) => v === '' || z.string().email().safeParse(v).success, 'Invalid email format')
       .optional()
       .transform((v) => v || null),
     billing_address: z.string().optional().transform((v) => v || null),
