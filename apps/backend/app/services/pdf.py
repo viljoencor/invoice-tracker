@@ -6,9 +6,9 @@ from reportlab.pdfgen import canvas
 
 def render_invoice_pdf(invoice: dict, client: dict, items: list[dict]) -> bytes:
     # Generates a printable PDF in memory from live invoice data so nothing is written to disk.
-    # Step 1: Open in-memory buffer; 
-    # Step 2: Draw header (number, dates, client); 
-    # Step 3: Render line-items table; 
+    # Step 1: Open in-memory buffer;
+    # Step 2: Draw header (number, dates, client);
+    # Step 3: Render line-items table;
     # Step 4: Draw totals section; Step 5: Return PDF bytes.
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)

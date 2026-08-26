@@ -20,8 +20,8 @@ async def create_client(
     db: AsyncSession = Depends(get_db),
 ):
     # Only OWNER role can add clients to prevent members from modifying billing contacts.
-    # Step 1: Require OWNER role; 
-    # Step 2: Persist new client under caller's org; 
+    # Step 1: Require OWNER role;
+    # Step 2: Persist new client under caller's org;
     # Step 3: Return refreshed row.
     org_id = claims["org_id"]
     c = Client(
@@ -40,8 +40,8 @@ async def list_clients(
     db: AsyncSession = Depends(get_db),
 ):
     # Supports name/email search so the invoice form can find clients without loading all of them.
-    # Step 1: Scope to org; 
-    # Step 2: Apply optional case-insensitive name/email LIKE filter; 
+    # Step 1: Scope to org;
+    # Step 2: Apply optional case-insensitive name/email LIKE filter;
     # Step 3: Order newest-first.
     stmt = select(Client).where(Client.org_id == claims["org_id"])
     if q:
@@ -64,7 +64,7 @@ async def get_client(
     db: AsyncSession = Depends(get_db),
 ):
     # Scoped to org_id so users can never read another organisation's clients.
-    # Step 1: Fetch client scoped to org; 
+    # Step 1: Fetch client scoped to org;
     # Step 2: Raise 404 if not found.
     c = (
         await db.execute(
@@ -84,8 +84,8 @@ async def update_client(
     db: AsyncSession = Depends(get_db),
 ):
     # PATCH so the frontend only needs to send changed fields, not the full record.
-    # Step 1: Fetch client scoped to org; 
-    # Step 2: Apply partial field update; 
+    # Step 1: Fetch client scoped to org;
+    # Step 2: Apply partial field update;
     # Step 3: Commit and return refreshed row.
     c = (
         await db.execute(
@@ -108,8 +108,8 @@ async def delete_client(
     db: AsyncSession = Depends(get_db),
 ):
     # The 409 guard prevents orphaned invoices referencing a deleted client.
-    # Step 1: Fetch client scoped to org; 
-    # Step 2: Delete; 
+    # Step 1: Fetch client scoped to org;
+    # Step 2: Delete;
     # Step 3: Rollback and raise 409 if FK constraint fires.
     c = (
         await db.execute(

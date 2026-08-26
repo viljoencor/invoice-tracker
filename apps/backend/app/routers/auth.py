@@ -28,8 +28,8 @@ audit = get_logger("audit")
 @limiter.limit(f"{settings.rate_limit_per_minute}/minute")
 async def register(request: Request, body: RegisterRequest, db: AsyncSession = Depends(get_db)):  # noqa: ARG001
     # Creates org + owner user atomically so a half-created account can never exist.
-    # Step 1: Reject duplicate email; 
-    # Step 2: Create org, user, OWNER membership; 
+    # Step 1: Reject duplicate email;
+    # Step 2: Create org, user, OWNER membership;
     # Step 3: Mint + persist token pair.
     q = await db.execute(select(User).where(User.email == body.email))
     if q.scalar_one_or_none():
@@ -56,10 +56,10 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
 @limiter.limit(f"{settings.rate_limit_per_minute}/minute")
 async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends(get_db)):  # noqa: ARG001
     # Issues a token pair on success; a single generic 401 hides whether the email or password was wrong.
-    # Step 1: Lookup user by email; 
-    # Step 2: Verify password; 
-    # Step 3: Fetch org membership; 
-    # Step 4: Persist refresh token; 
+    # Step 1: Lookup user by email;
+    # Step 2: Verify password;
+    # Step 3: Fetch org membership;
+    # Step 4: Persist refresh token;
     # Step 5: Return token pair.
     q = await db.execute(select(User).where(User.email == body.email))
     user = q.scalar_one_or_none()
@@ -89,8 +89,8 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
 @router.get("/me", response_model=UserOut)
 async def get_me(claims: dict = Depends(get_current_claims), db: AsyncSession = Depends(get_db)):
     # Lets the frontend resolve the current user's identity and role without storing either client-side.
-    # Step 1: Load user from claims.sub; 
-    # Step 2: Verify org membership; 
+    # Step 1: Load user from claims.sub;
+    # Step 2: Verify org membership;
     # Step 3: Return UserOut with role.
     user = (await db.execute(select(User).where(User.id == claims["sub"]))).scalar_one_or_none()
     if not user:
@@ -119,10 +119,10 @@ async def get_me(claims: dict = Depends(get_current_claims), db: AsyncSession = 
 @router.post("/refresh", response_model=TokenPair)
 async def refresh_tokens(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
     # Rotates the refresh token on every use so a stolen token can only be used once before being detected.
-    # Step 1: Hash inbound token; 
-    # Step 2: Load record, check revoked/expired; 
-    # Step 3: Verify membership; 
-    # Step 4: Rotate (revoke old, mint new); 
+    # Step 1: Hash inbound token;
+    # Step 2: Load record, check revoked/expired;
+    # Step 3: Verify membership;
+    # Step 4: Rotate (revoke old, mint new);
     # Step 5: Return new pair.
     now = datetime.now(UTC)
     token_hash = hash_refresh_token(body.refresh_token)

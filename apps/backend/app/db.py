@@ -22,7 +22,7 @@ Base = declarative_base()
 
 def create_engine_with_config() -> AsyncEngine:
     # SQLite needs different connect args than PostgreSQL; centralises that branching so the rest of the app works across different variations.
-    # Step 1: Detect SQLite vs PostgreSQL URL; 
+    # Step 1: Detect SQLite vs PostgreSQL URL;
     # Step 2: Create async engine with matching pool/echo config.
     if settings.database_url.startswith("sqlite"):
         return create_async_engine(
@@ -50,8 +50,8 @@ def create_engine_with_config() -> AsyncEngine:
 )
 async def verify_db_connection(engine: AsyncEngine) -> None:
     # Fails fast at startup with retries so a bad DB URL surfaces immediately rather than on the first real request.
-    # Step 1: Open connection; 
-    # Step 2: Execute SELECT 1; 
+    # Step 1: Open connection;
+    # Step 2: Execute SELECT 1;
     # Step 3: Retry up to N times on OperationalError.
     async with engine.connect() as conn:
         await conn.execute(text("SELECT 1"))
@@ -65,7 +65,7 @@ async_session_maker = sessionmaker(bind=engine, class_=AsyncSession, expire_on_c
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     # Yields a per-request session from the pool so each request gets its own isolated transaction context.
-    # Step 1: Open a session from the connection pool; 
+    # Step 1: Open a session from the connection pool;
     # Step 2: Yield to caller; Step 3: Auto-close on exit.
     async with async_session_maker() as session:
         yield session

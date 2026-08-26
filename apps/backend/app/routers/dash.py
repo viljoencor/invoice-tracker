@@ -13,8 +13,8 @@ router = APIRouter(prefix="/dash", tags=["dashboard"])
 @router.get("/summary", response_model=DashboardSummaryOut)
 async def summary(claims=Depends(get_current_claims), db: AsyncSession = Depends(get_db)):
     # Runs all KPI aggregations and 12-month revenue rollup in two queries to minimise round-trips.
-    # Step 1: Run CTE for KPIs (total billed, due, overdue count, aging buckets); 
-    # Step 2: Run 12-month revenue rollup; 
+    # Step 1: Run CTE for KPIs (total billed, due, overdue count, aging buckets);
+    # Step 2: Run 12-month revenue rollup;
     # Step 3: Return merged dict.
     org_id = claims["org_id"]
 

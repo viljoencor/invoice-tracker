@@ -83,10 +83,10 @@ async def create_invoice(
     db: AsyncSession = Depends(get_db),
 ):
     # Atomic sequence number prevents duplicate invoice numbers even under concurrent requests from the same org.
-    # Step 1: Verify client belongs to org; 
-    # Step 2: Compute totals; 
-    # Step 3: Get atomic sequence number; 
-    # Step 4: Persist invoice + line items; 
+    # Step 1: Verify client belongs to org;
+    # Step 2: Compute totals;
+    # Step 3: Get atomic sequence number;
+    # Step 4: Persist invoice + line items;
     # Step 5: Return InvoiceOut.
     org_id: uuid.UUID = claims["org_id"]
 
@@ -166,8 +166,8 @@ async def get_invoice_summary(
     db: AsyncSession = Depends(get_db),
 ):
     # Aggregates all billing KPIs in one pass so the dashboard loads with a single API call.
-    # Step 1: Query total due, overdue count, paid-last-30d, upcoming due; 
-    # Step 2: Rollup 12-month revenue; 
+    # Step 1: Query total due, overdue count, paid-last-30d, upcoming due;
+    # Step 2: Rollup 12-month revenue;
     # Step 3: Return combined summary.
     org_id = claims["org_id"]
     today = date.today()
@@ -252,8 +252,8 @@ async def get_invoice(
     db: AsyncSession = Depends(get_db),
 ):
     # Joins client name into the result so the detail view doesn't need a second request.
-    # Step 1: JOIN invoice with client; 
-    # Step 2: Scope to org; 
+    # Step 1: JOIN invoice with client;
+    # Step 2: Scope to org;
     # Step 3: Return InvoiceDetail with client_name.
     stmt = (
         select(
