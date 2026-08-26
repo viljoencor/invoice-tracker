@@ -63,7 +63,9 @@ async function onSubmit() {
       body: { email: email.value, password: password.value },
       credentials: 'include',
     })
-    await navigateTo('/')
+    // Hard navigation so the browser sends the new session cookie in the SSR request,
+    // bypassing stale useCookie state that persists from the server-rendered login page.
+    window.location.href = '/'
   } catch (e: any) {
     error.value =
       e?.data?.message ||

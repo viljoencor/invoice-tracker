@@ -1,29 +1,20 @@
 import { computed } from 'vue'
 
-/**
- * Single application-facing auth state abstraction.
- *
- * Architecture (Phase 8):
- * - Access and refresh tokens live in httpOnly cookies managed by the Nitro BFF.
- * - Client JS only reads the `session` indicator cookie (not httpOnly) to know
- *   whether a session exists without touching the actual tokens.
- * - logout() calls the BFF which revokes the refresh token and clears all cookies.
- */
 export function useAuth() {
-  // Non-httpOnly indicator set by the BFF on login; cleared on logout.
-  const session = useCookie<string | null>('session', { sameSite: 'lax' })
+  // Read directly from document.cookie; useCookie() useState can hold a stale value
+  // when the BFF sets the session cookie via a Set-Cookie header mid-session.
+  const hasSession = () =>
+    typeof document !== 'undefined' &&
+    document.cookie.split(';').some(c => c.trim().startsWith('session=1'))
 
-  /** True when the BFF has established an authenticated session. */
-  // Reads the non-httpOnly `session` cookie so client JS can react to auth state without touching real tokens.
-  const isAuthenticated = computed(() => session.value === '1')
+  const isAuthenticated = computed(hasSession)
 
-  /** Revoke the server-side session and redirect to the login page. */
-  // Calls BFF to revoke the refresh token before navigating, ensuring the server record is cleaned up.
   async function logout() {
     try {
       await $fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
     } catch { /* ignore — BFF-side cookies are cleared regardless */ }
-    await navigateTo('/login')
+    // Hard navigation so stale useCookie state doesn't keep isAuthenticated true.
+    window.location.href = '/login'
   }
 
   return { isAuthenticated, logout }

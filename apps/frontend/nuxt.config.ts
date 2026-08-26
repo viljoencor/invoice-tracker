@@ -15,7 +15,8 @@ export default defineNuxtConfig({
     headers: {
       contentSecurityPolicy: {
         'default-src': ["'self'"],
-        'script-src': ["'self'"],
+        // 'strict-dynamic' lets scripts loaded by a nonce-trusted script run.
+        'script-src': ["'self'", "'strict-dynamic'"],
         // 'unsafe-inline' is required for Tailwind JIT and Vue SFC styles.
         'style-src': ["'self'", "'unsafe-inline'", 'https://rsms.me'],
         'font-src': ["'self'", 'data:', 'https://rsms.me'],
@@ -36,19 +37,16 @@ export default defineNuxtConfig({
       crossOriginResourcePolicy: false,
       strictTransportSecurity: false,
     },
-    // ssr: false means assets are pre-rendered. nuxt-security's SSG plugin
-    // computes SHA-256 hashes for each script chunk at build time and appends
-    // them to script-src automatically — no stale hardcoded hashes.
     ssg: {
       hashScripts: true,
-      hashStyles: false, // styles rely on 'unsafe-inline' above
+      hashStyles: false, // styles use 'unsafe-inline'
     },
     rateLimiter: false,              // rate-limiting handled by the backend
     xssValidator: false,             // not needed for this API-driven SPA
     corsHandler: false,              // same-origin only; no CORS needed
     allowedMethodsRestricter: false,
     csrf: false,                     // custom CSRF in server/middleware/csrf.ts
-    nonce: false,                    // nonces require SSR; this app uses ssr: false
+    nonce: false,                    // nonces require SSR; route middleware runs client-side with ssr: false
   },
   css: ['~/assets/tailwind.css'],
   postcss: {
@@ -89,5 +87,14 @@ export default defineNuxtConfig({
   },
   imports: {
     dirs: ['stores'],
+  },
+
+  // Vite HMR and inline scripts are incompatible with strict-dynamic + nonces.
+  $development: {
+    security: {
+      headers: {
+        contentSecurityPolicy: false,
+      },
+    },
   },
 })
