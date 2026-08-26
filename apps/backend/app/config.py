@@ -12,7 +12,6 @@ class Settings(BaseSettings):
     )
 
     # Environment
-    # Testing 
     environment: str = Field(
         default="development", description="Environment: development, staging, production"
     )
