@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { mockFetchClient, mockNavigateTo } from '../../setup'
 import ClientNew from '../../../pages/clients/new.vue'
 
@@ -12,10 +13,11 @@ describe('pages/clients/new.vue', () => {
     const wrapper = mount(ClientNew, {
       global: { stubs: { NuxtLink: { template: '<a><slot /></a>' } } },
     })
-    // Submit form without filling name — vee-validate validates async
+    // Submit form without filling name ï¿½ vee-validate validates async
     await wrapper.find('form').trigger('submit')
     await flushPromises()
     await flushPromises()
+    await nextTick()
     const error = wrapper.find('[data-testid="name-error"]')
     expect(error.exists()).toBe(true)
     expect(error.text()).toContain('Client name is required')
@@ -30,6 +32,7 @@ describe('pages/clients/new.vue', () => {
     await wrapper.find('form').trigger('submit')
     await flushPromises()
     await flushPromises()
+    await nextTick()
     const error = wrapper.find('[data-testid="email-error"]')
     expect(error.exists()).toBe(true)
     expect(error.text()).toContain('Invalid email format')

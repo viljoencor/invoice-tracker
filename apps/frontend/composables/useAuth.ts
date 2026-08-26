@@ -13,8 +13,9 @@ export function useAuth() {
     try {
       await $fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
     } catch { /* ignore — BFF-side cookies are cleared regardless */ }
-    // Hard navigation so stale useCookie state doesn't keep isAuthenticated true.
-    window.location.href = '/login'
+    // navigateTo is safe here: logout clears the session cookie, so the middleware
+    // sees no cookie and allows /login without a stale-state redirect.
+    await navigateTo('/login')
   }
 
   return { isAuthenticated, logout }

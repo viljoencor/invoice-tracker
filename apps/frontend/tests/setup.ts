@@ -49,6 +49,9 @@ vi.stubGlobal('$fetch', $fetchMock)
 // ── Per-test reset ────────────────────────────────────────────────────────────
 beforeEach(() => {
   mockToken.value = null
+  // Reset session cookie value so tests that set document.cookie='session=1' don't bleed.
+  // happy-dom doesn't honor max-age=0 deletion, so we overwrite with an empty value instead.
+  document.cookie = 'session='
   vi.clearAllMocks()
   // Restore create() and direct call implementations after clearAllMocks.
   mockFetchCreate.mockReturnValue(mockFetchClient)
