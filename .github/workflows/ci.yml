@@ -2,220 +2,396 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [main, master, develop]
   pull_request:
-    branches: [ main, master, develop ]
+    branches: [main, master, develop]
 
-# Required permissions for security scanning
 permissions:
   contents: read
   security-events: write
   pull-requests: read
+  packages: write   # required for GHCR push in the publish job
 
 env:
   PYTHON_VERSION: "3.12"
   NODE_VERSION: "20"
+  REGISTRY: ghcr.io
 
+# ============================================================================
+# A. Backend quality — ALL gates are blocking
+# ============================================================================
 jobs:
-  # ============================================================================
-  # Backend Testing & Quality Checks
-  # ============================================================================
-  backend-test:
-    name: Backend Tests
+  backend-quality:
+    name: Backend Quality
     runs-on: ubuntu-latest
-    
-    # Tests use SQLite in-memory database, no PostgreSQL needed for unit tests
-    
     defaults:
       run:
         working-directory: apps/backend
-    
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      
-      - name: Install uv
-        uses: astral-sh/setup-uv@v3
-      
-      - name: Install dependencies
-        run: |
-          uv sync --all-extras --dev
-      
-      - name: Run linting (Ruff)
-        run: |
-          uv run ruff check app tests
-      
-      - name: Run formatting check (Ruff)
-        run: |
-          uv run ruff format --check app tests
-      
-      - name: Run type checking (MyPy)
-        run: |
-          uv run mypy app
-        continue-on-error: true  # Don't fail build on type errors initially
-      
-      - name: Run security scan (Bandit)
-        run: |
-          uv run bandit -r app -ll
-      
-      - name: Run tests with coverage
+
+      - uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies (incl. dev)
+        run: uv sync --all-extras --dev
+
+      - name: Lint (Ruff)
+        run: uv run ruff check app tests
+
+      - name: Format check (Ruff)
+        run: uv run ruff format --check app tests
+
+      - name: Type check (MyPy)
+        # continue-on-error removed — type errors now block the pipeline
+        run: uv run mypy app
+
+      - name: Security scan (Bandit)
+        run: uv run bandit -r app -ll
+
+      - name: Tests with coverage
         env:
-          # Tests use SQLite in-memory database (configured in conftest.py)
-          # DATABASE_URL is intentionally NOT set here - let tests use their own config
           JWT_SECRET: _Bk2swV-irvgVGswT169WWh4ty2DFVgvTS9q3_KtlHo
           ENVIRONMENT: development
-        run: |
-          uv run pytest --cov --cov-report=xml --cov-report=term
-      
+        # --cov-fail-under=50 is set in pyproject.toml addopts; exit non-zero
+        # if coverage drops below the threshold.
+        run: uv run pytest --cov --cov-report=xml --cov-report=term
+
+      - name: Upload backend coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: apps/backend/coverage.xml
+          retention-days: 7
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
-          file: ./apps/backend/coverage.xml
+          file: apps/backend/coverage.xml
           flags: backend
-          fail_ci_if_error: false
+          fail_ci_if_error: false  # advisory — external service availability
 
   # ============================================================================
-  # Frontend Testing & Quality Checks
+  # B. Frontend quality — ALL gates are blocking
   # ============================================================================
-  frontend-test:
-    name: Frontend Tests
+  frontend-quality:
+    name: Frontend Quality
     runs-on: ubuntu-latest
-    
     defaults:
       run:
         working-directory: apps/frontend
-    
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: npm
           cache-dependency-path: apps/frontend/package-lock.json
-      
+
       - name: Install dependencies
         run: npm ci
-      
-      - name: Run linting
-        run: npm run lint || echo "Linting not configured"
-        continue-on-error: true
-      
-      - name: Run type checking
-        run: npx nuxi typecheck
-        continue-on-error: true
-      
-      - name: Build frontend
+
+      - name: Generate Nuxt type stubs
+        run: npx nuxt prepare
+
+      - name: Type check (vue-tsc)
+        # continue-on-error removed — type errors block the pipeline
+        run: npm run typecheck
+
+      - name: Unit tests with coverage
+        # vitest.config.ts defines thresholds; exits non-zero if they are not met
+        run: npm run test:coverage
+
+      - name: Upload frontend coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: apps/frontend/coverage/
+          retention-days: 7
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          directory: apps/frontend/coverage/
+          flags: frontend
+          fail_ci_if_error: false  # advisory
+
+      - name: Production build
+        # Validates that the app can build without NUXT_API_BASE because it is
+        # a runtime-only private config — it is never baked into the bundle.
         run: npm run build
-        env:
-          NUXT_PUBLIC_API_BASE: http://localhost:8000/api/v1
 
   # ============================================================================
-  # Docker Build Test
+  # C + D. Integration & E2E — compose starts in this job
   # ============================================================================
-  docker-build:
-    name: Docker Build Test
+  integration:
+    name: Integration & E2E
     runs-on: ubuntu-latest
-    
+    needs: [backend-quality, frontend-quality]
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
+      - uses: actions/checkout@v4
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
-      - name: Build backend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./apps/backend
-          push: false
-          tags: invoice-tracker-backend:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      
-      - name: Build frontend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./apps/frontend
-          target: development
-          push: false
-          tags: invoice-tracker-frontend:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
-  # ============================================================================
-  # Integration Tests
-  # ============================================================================
-  integration-test:
-    name: Integration Tests
-    runs-on: ubuntu-latest
-    needs: [backend-test, frontend-test]
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Start services with Docker Compose
+      - name: Start full stack
+        working-directory: infra
+        run: docker compose up --build -d
+
+      # C. Poll backend readiness — no fixed sleep
+      - name: Wait for backend readiness
         run: |
-          cd infra
-          docker compose up -d
-          sleep 20  # Wait for services to be ready
-      
-      - name: Check backend health
+          echo "Polling http://localhost:8000/healthz (max 120 s) …"
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8000/healthz > /dev/null 2>&1; then
+              echo "✓ Backend ready after $((i * 2)) s"
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "✗ Backend did not become ready within 120 s"
+              exit 1
+            fi
+            sleep 2
+          done
+
+      # F. Migrations — run before the app handles requests; idempotent via Alembic
+      - name: Run database migrations (upgrade head)
+        working-directory: infra
+        run: docker compose exec -T backend alembic upgrade head
+
+      - name: Verify migration downgrade/upgrade cycle
+        working-directory: infra
         run: |
-          curl -f http://localhost:8000/healthz || exit 1
-      
-      - name: Check backend readiness
+          docker compose exec -T backend alembic downgrade -1
+          docker compose exec -T backend alembic upgrade head
+
+      - name: Seed deterministic test data
+        working-directory: infra
+        run: docker compose exec -T backend python -m app.scripts.seed
+
+      # C. Poll frontend readiness
+      - name: Wait for frontend readiness
         run: |
-          curl -f http://localhost:8000/readiness || exit 1
-      
-      - name: Run database migrations
-        run: |
-          docker compose -f infra/docker-compose.yml exec -T backend alembic upgrade head
-      
-      - name: Seed test data
-        run: |
-          docker compose -f infra/docker-compose.yml exec -T backend python -m app.scripts.seed
-      
-      - name: Check frontend health
-        run: |
-          curl -f http://localhost:3000 || exit 1
-      
-      - name: Stop services
+          echo "Polling http://localhost:3000 (max 120 s) …"
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000 > /dev/null 2>&1; then
+              echo "✓ Frontend ready after $((i * 2)) s"
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "✗ Frontend did not become ready within 120 s"
+              exit 1
+            fi
+            sleep 2
+          done
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: apps/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: apps/frontend
+        run: npm ci
+
+      - name: Install Playwright browsers (Chromium only)
+        working-directory: apps/frontend
+        run: npx playwright install --with-deps chromium
+
+      # D. E2E in the same job — admin123 is the seed script's hardcoded test password
+      - name: Run E2E tests
+        working-directory: apps/frontend
+        env:
+          E2E_BASE_URL: http://localhost:3000
+          E2E_TEST_EMAIL: admin@example.com
+          E2E_TEST_PASSWORD: admin123
+        run: npm run test:e2e
+
+      - name: Upload E2E failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-artifacts
+          path: |
+            apps/frontend/test-results/
+            apps/frontend/playwright-report/
+          retention-days: 7
+
+      # Always collect logs so failures are debuggable
+      - name: Collect service logs
         if: always()
-        run: |
-          cd infra
-          docker compose logs
-          docker compose down -v
+        working-directory: infra
+        run: docker compose logs --no-color > /tmp/compose-logs.txt 2>&1
+
+      - name: Upload compose logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-logs
+          path: /tmp/compose-logs.txt
+          retention-days: 7
+
+      - name: Tear down stack
+        if: always()
+        working-directory: infra
+        run: docker compose down -v
 
   # ============================================================================
-  # Security Scanning
+  # Security — filesystem SCA scan (SARIF upload advisory; scan exit-code blocking)
   # ============================================================================
   security-scan:
-    name: Security Scan
+    name: Security Scan (filesystem)
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
+      - uses: actions/checkout@v4
+
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-      
-      - name: Upload Trivy results to GitHub Security
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
+          exit-code: '0'
+          severity: CRITICAL
+          ignore-unfixed: true
+
+      - name: Upload Trivy SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
+        if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
-        continue-on-error: true  # Allow workflow to succeed even if upload fails (e.g., on forks)
+          sarif_file: trivy-results.sarif
+        continue-on-error: true  # advisory — external service availability
+
+  # ============================================================================
+  # E. Build & publish immutable production images (main/master only)
+  # ============================================================================
+  publish:
+    name: Build & Publish Images
+    runs-on: ubuntu-latest
+    needs: [integration]
+    if: >
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Resolve image names (lower-case owner required by GHCR)
+      - name: Compute image names
+        id: names
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "backend=${REGISTRY}/${OWNER}/invoice-tracker-backend" >> "$GITHUB_OUTPUT"
+          echo "frontend=${REGISTRY}/${OWNER}/invoice-tracker-frontend" >> "$GITHUB_OUTPUT"
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+
+      - name: Docker metadata — backend
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.names.outputs.backend }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Docker metadata — frontend
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.names.outputs.frontend }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      # Build and push production backend image with SBOM + provenance attestations
+      - name: Build and push backend image
+        id: push-backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/backend
+          target: production
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      # Build and push production frontend image
+      - name: Build and push frontend image
+        id: push-frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/frontend
+          target: production
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      # E. Scan the final published images — not the source filesystem
+      - name: Scan backend image (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: >-
+            ${{ steps.names.outputs.backend }}@${{ steps.push-backend.outputs.digest }}
+          format: sarif
+          output: trivy-backend.sarif
+          exit-code: '1'
+          severity: CRITICAL
+          ignore-unfixed: true
+
+      - name: Scan frontend image (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: >-
+            ${{ steps.names.outputs.frontend }}@${{ steps.push-frontend.outputs.digest }}
+          format: sarif
+          output: trivy-frontend.sarif
+          exit-code: '1'
+          severity: CRITICAL
+          ignore-unfixed: true
+
+      - name: Upload image scan SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-backend.sarif
+        continue-on-error: true  # advisory
+
+      - name: Upload frontend scan SARIF results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-frontend.sarif
+        continue-on-error: true  # advisory
+

@@ -4,6 +4,11 @@ Revision ID: 8cf5269df348
 Revises: b6c2545a61ef
 Create Date: 2025-11-03 16:31:34.751954
 
+IMPORTANT: This is a historical no-op migration (empty upgrade/downgrade).
+It was auto-generated but never contained schema changes.
+DO NOT REMOVE — a1b2c3d4e5f6_add_refresh_tokens declares down_revision='8cf5269df348'.
+Removing this file would break the migration chain.
+See docs/adr/ADR-006-migration-execution-strategy.md for details.
 """
 from alembic import op
 import sqlalchemy as sa

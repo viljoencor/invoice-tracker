@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { InvoiceList } from '~/types/api'
+
 definePageMeta({ middleware: 'auth' })
 
 import { ref } from 'vue'
@@ -7,10 +9,10 @@ import { useApi } from '~/composables/useApi'
 const api = useApi()
 
 // Always return an array so v-for can render immediately
-const { data: invoices, pending, error, refresh } = await useAsyncData(
+const { data: invoices, pending, error, refresh } = await useAsyncData<InvoiceList[]>(
   'invoices',
-  () => api.get('/invoices', { params: { sort: '-issue_date', limit: 50 } }),
-  { default: () => [] }                     // <-- important
+  () => api.get<InvoiceList[]>('/invoices', { params: { sort: '-issue_date', limit: 50 } }),
+  { default: (): InvoiceList[] => [] },
 )
 
 function formatCurrency(amount: number): string {
@@ -50,8 +52,8 @@ const statuses: Record<string, string> = {
       <div class="mt-8 flex flex-col">
         <div class="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
           <div class="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-            <div v-if="pending" class="text-sm text-gray-500">Loading…</div>
-            <div v-else-if="error" class="text-sm text-red-600">Failed to load invoices</div>
+            <div v-if="pending" class="text-sm text-gray-500" data-testid="invoices-loading">Loading…</div>
+            <div v-else-if="error" class="text-sm text-red-600" data-testid="invoices-error">Failed to load invoices</div>
 
             <div v-else class="overflow-hidden shadow ring-1 ring-black/5 md:rounded-lg">
               <table class="min-w-full divide-y divide-gray-300">
@@ -69,7 +71,7 @@ const statuses: Record<string, string> = {
 
                 <tbody class="divide-y divide-gray-200 bg-white">
                   <!-- iterate over invoices (auto-unwrapped ref) -->
-                  <tr v-for="invoice in invoices" :key="invoice.id">
+                  <tr v-for="invoice in invoices" :key="invoice.id" :data-testid="`invoice-row-${invoice.id}`">
                     <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-blue-600 hover:text-blue-900 sm:pl-6">
                       <NuxtLink :to="`/invoices/${invoice.id}`">{{ invoice.number }}</NuxtLink>
                     </td>
@@ -100,7 +102,7 @@ const statuses: Record<string, string> = {
                   </tr>
 
                   <!-- Optional: empty state -->
-                  <tr v-if="invoices.length === 0">
+                  <tr v-if="(invoices ?? []).length === 0">
                     <td colspan="7" class="py-6 text-center text-sm text-gray-500">
                       No invoices yet.
                     </td>

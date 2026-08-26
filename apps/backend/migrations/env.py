@@ -1,4 +1,5 @@
 import logging
+import os
 from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool, text
@@ -11,8 +12,12 @@ logger = logging.getLogger(__name__)
 
 config = context.config
 
-# Get the database URL from environment
-database_url = "postgresql://postgres:postgres@db:5432/invoicer"
+# Read the database URL from the environment; strip the async driver suffix
+# because Alembic uses synchronous SQLAlchemy (psycopg2 / psycopg).
+_raw_url = os.environ.get(
+    "DATABASE_URL", "postgresql://postgres:postgres@db:5432/invoicer"
+)
+database_url = _raw_url.replace("+asyncpg", "")
 config.set_main_option("sqlalchemy.url", database_url)
 
 if config.config_file_name is not None:

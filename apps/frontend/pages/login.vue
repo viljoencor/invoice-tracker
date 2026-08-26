@@ -10,6 +10,7 @@
             v-model="email"
             type="email"
             required
+            data-testid="login-email"
             class="w-full border rounded px-3 py-2"
             placeholder="admin@example.com"
           />
@@ -20,6 +21,7 @@
             v-model="password"
             :type="show ? 'text' : 'password'"
             required
+            data-testid="login-password"
             class="w-full border rounded px-3 py-2"
             placeholder="••••••••"
           />
@@ -32,41 +34,41 @@
         <button
           type="submit"
           :disabled="loading"
+          data-testid="login-submit"
           class="w-full bg-black text-white rounded px-4 py-2 disabled:opacity-50"
         >
           {{ loading ? 'Signing in…' : 'Sign in' }}
         </button>
 
-        <p v-if="error" class="text-red-600 text-sm">{{ error }}</p>
+        <p v-if="error" data-testid="login-error" class="text-red-600 text-sm">{{ error }}</p>
       </form>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-const email = ref('admin@example.com')
-const password = ref('admin123')
+const email = ref('')
+const password = ref('')
 const show = ref(false)
 const loading = ref(false)
 const error = ref<string | null>(null)
-
-const tokenCookie = useCookie<string | null>('token', { sameSite: 'lax' })
-const api = useApi()
 
 async function onSubmit() {
   loading.value = true
   error.value = null
   try {
-    // Backend returns { access_token, token_type: "bearer" }
-    const res = await api.post('/auth/login', { email: email.value, password: password.value })
-    const { access_token } = res as any
-
-    // Store ONLY the raw JWT; the composable adds "Bearer " properly
-    tokenCookie.value = access_token
-
-    await navigateTo('/dashboard') // or "/" depending on your choice
+    // BFF sets httpOnly cookies — no token handling in client code
+    await $fetch('/api/auth/login', {
+      method: 'POST',
+      body: { email: email.value, password: password.value },
+      credentials: 'include',
+    })
+    // Hard navigation so the browser sends the new session cookie in the SSR request,
+    // bypassing stale useCookie state that persists from the server-rendered login page.
+    window.location.href = '/'
   } catch (e: any) {
     error.value =
+      e?.data?.message ||
       e?.data?.detail?.message ||
       e?.data?.detail ||
       e?.message ||

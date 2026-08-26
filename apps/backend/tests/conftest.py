@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import Settings
 from app.db import Base, async_session_maker, engine
 from app.main import app as fastapi_app
-from app.models import Client, Org, OrgMember, User
+from app.models import Client, Invoice, Org, OrgMember, User
 from app.security import create_access_token, hash_password
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
@@ -92,7 +92,7 @@ async def test_client_record(db_session: AsyncSession, test_org: Org) -> Client:
 
 @pytest.fixture
 async def auth_token(test_user: User, test_org: Org) -> str:
-    return create_access_token(str(test_user.id), str(test_org.id))
+    return create_access_token(str(test_user.id), str(test_org.id), "OWNER")
 
 
 @pytest.fixture
@@ -105,6 +105,81 @@ async def client(test_engine) -> AsyncGenerator[AsyncClient, None]:
 async def authenticated_client(client: AsyncClient, auth_token: str) -> AsyncClient:
     client.headers["Authorization"] = f"Bearer {auth_token}"
     return client
+
+
+@pytest.fixture
+async def other_org(db_session: AsyncSession) -> Org:
+    org = Org(name="Other Organization")
+    db_session.add(org)
+    await db_session.commit()
+    await db_session.refresh(org)
+    return org
+
+
+@pytest.fixture
+async def other_org_client_record(db_session: AsyncSession, other_org: Org) -> Client:
+    c = Client(
+        org_id=other_org.id,
+        name="Other Org Client",
+        email="other@othercorp.com",
+    )
+    db_session.add(c)
+    await db_session.commit()
+    await db_session.refresh(c)
+    return c
+
+
+@pytest.fixture
+async def member_user(db_session: AsyncSession, test_org: Org) -> User:
+    user = User(
+        email="member@example.com",
+        name="Member User",
+        password_hash=hash_password("memberpassword123"),
+    )
+    db_session.add(user)
+    await db_session.commit()
+    membership = OrgMember(org_id=test_org.id, user_id=user.id, role="MEMBER")
+    db_session.add(membership)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+async def member_auth_token(member_user: User, test_org: Org) -> str:
+    return create_access_token(str(member_user.id), str(test_org.id), "MEMBER")
+
+
+@pytest.fixture
+async def member_authenticated_client(
+    test_engine, member_auth_token: str
+) -> AsyncGenerator[AsyncClient, None]:
+    async with AsyncClient(transport=ASGITransport(app=fastapi_app), base_url="http://test") as ac:
+        ac.headers["Authorization"] = f"Bearer {member_auth_token}"
+        yield ac
+
+
+@pytest.fixture
+async def client_with_invoice(
+    db_session: AsyncSession, test_org: Org, test_client_record: Client
+) -> Client:
+    inv = Invoice(
+        org_id=test_org.id,
+        client_id=test_client_record.id,
+        number="INV-TEST-001",
+        issue_date=date.today(),
+        due_date=date.today() + timedelta(days=30),
+        currency="ZAR",
+        subtotal_cents=10000,
+        tax_cents=1500,
+        total_cents=11500,
+        balance_cents=11500,
+        status="draft",
+        meta={},
+    )
+    db_session.add(inv)
+    await db_session.commit()
+    return test_client_record
 
 
 @pytest.fixture

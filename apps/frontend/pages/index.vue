@@ -2,37 +2,37 @@
 import { computed } from 'vue'
 import KpiCard from '~/components/KpiCard.vue'
 import FancyRevenue from '~/components/RevenueChart.vue'
+import type { DashboardSummary, InvoiceList } from '~/types/api'
 
 definePageMeta({ middleware: 'auth' })
 const api = useApi()
 
-const { data: summaryData, pending, error } = await useAsyncData(
+const { data: summaryData, pending, error } = await useAsyncData<DashboardSummary>(
   'dash-summary',
-  () => api.get('/dash/summary'),
+  () => api.get<DashboardSummary>('/dash/summary'),
   {
-    default: () => ({
+    default: (): DashboardSummary => ({
       total_billed_cents: 0,
       total_due_cents: 0,
       overdue_count: 0,
-      revenue_by_month: [] as Array<{ month: string; total_cents: number; count: number }>
-    })
-  }
+      pending_count: 0,
+      bkt_0_30: null,
+      bkt_31_60: null,
+      bkt_61_90: null,
+      bkt_90p: null,
+      revenue_by_month: [],
+    }),
+  },
 )
 
-const { data: recentInvoicesData } = await useAsyncData(
+const { data: recentInvoicesData } = await useAsyncData<InvoiceList[]>(
   'recent-invoices',
-  () => api.get('/invoices', { params: { limit: 5, sort: '-issue_date' } }),
-  { default: () => [] }
+  () => api.get<InvoiceList[]>('/invoices', { params: { limit: 5, sort: '-issue_date' } }),
+  { default: (): InvoiceList[] => [] },
 )
 
-const { data: invoicesAllMini } = await useAsyncData(
-  'invoices-mini',
-  () => api.get('/invoices', { params: { limit: 500, sort: '-issue_date' } }),
-  { default: () => [] }
-)
-
-const summary = computed(() => summaryData.value ?? {})
-const recentInvoices = computed<any[]>(() => recentInvoicesData.value ?? [])
+const summary = computed(() => summaryData.value!)
+const recentInvoices = computed(() => recentInvoicesData.value ?? [])
 
 /* Helpers */
 const ZAR = (rands: number) => new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(rands)
@@ -41,15 +41,12 @@ const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString('en-ZA', { mo
 /* KPI values */
 const outstandingCents = computed(() => Number(summary.value.total_due_cents ?? 0))
 const overdueCount = computed(() => Number(summary.value.overdue_count ?? 0))
-const pendingCount = computed(() => {
-  const rows = (invoicesAllMini.value as any[]) || []
-  return rows.filter(r => ['draft', 'sent', 'partially_paid'].includes(String(r.status || '').toLowerCase())).length
-})
+const pendingCount = computed(() => Number(summary.value.pending_count ?? 0))
 
 /* Billed trend chip */
 type RevRow = { month: string; total_cents: number; count?: number }
 const revenueSeries = computed<RevRow[]>(() => {
-  const rows = (summary.value.revenue_by_month ?? []) as RevRow[]
+  const rows = summary.value.revenue_by_month ?? []
   return [...rows].sort((a, b) => a.month.localeCompare(b.month))
 })
 const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`

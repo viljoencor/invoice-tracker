@@ -19,6 +19,7 @@ services:
   backend:
     build:
       context: ../apps/backend
+      target: development
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/invoicer
       ENVIRONMENT: development
@@ -34,6 +35,7 @@ services:
       LOG_JSON_FORMAT: false
     volumes:
       - ../apps/backend/migrations:/app/migrations
+      - ../apps/backend/app:/app/app
     depends_on:
       db:
         condition: service_healthy
@@ -52,7 +54,7 @@ services:
       context: ../apps/frontend
       target: development
     environment:
-      NUXT_PUBLIC_API_BASE: http://localhost:8000
+      NUXT_API_BASE: http://backend:8000/api/v1
       NODE_ENV: development
     depends_on:
       backend:

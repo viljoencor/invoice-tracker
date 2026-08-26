@@ -3,12 +3,12 @@ import uuid
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import desc, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db import async_session_maker
+from ..db import get_db
 from ..models import Client, Invoice, InvoiceItem
 from ..schemas import (
     InvoiceCreate,
@@ -17,7 +17,7 @@ from ..schemas import (
     InvoiceOut,
     InvoiceSummary,
 )
-from ..security import get_current_claims
+from ..security import get_current_claims, require_role
 from ..services.pdf import render_invoice_pdf
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
@@ -32,22 +32,18 @@ ALLOWED_SORTS = {
 }
 
 
-async def get_db():
-    async with async_session_maker() as s:
-        yield s
-
-
 def _bp_to_fraction(bp: int) -> Decimal:
     # basis points to decimal (1500 bp = 0.15 = 15%)
     return (Decimal(bp) / Decimal(10000)).quantize(Decimal("0.0001"))
 
 
 def _to_cents(x: Decimal) -> int:
+    # Round Decimal to nearest integer cent using ROUND_HALF_UP.
     return int(x.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
 def calc_totals(items: list) -> tuple[int, int, int]:
-    # took forever to get the rounding right here
+    # Accumulate in Decimal then round once per bucket to avoid floating-point drift
     subtotal = Decimal(0)
     tax = Decimal(0)
     for it in items:
@@ -64,7 +60,8 @@ def calc_totals(items: list) -> tuple[int, int, int]:
 
 
 async def next_invoice_number(db: AsyncSession, org_id: uuid.UUID, year: int) -> str:
-    # TODO: this might have race conditions under high load, need to test
+    # INSERT ... ON CONFLICT DO UPDATE ... RETURNING is a single atomic operation;
+    # PostgreSQL guarantees next_seq increments exactly once per call with no race.
     sql = text(
         """
         INSERT INTO invoice_seq (org_id, next_seq)
@@ -79,12 +76,18 @@ async def next_invoice_number(db: AsyncSession, org_id: uuid.UUID, year: int) ->
     return f"INV-{year}-{next_seq:05d}"
 
 
-@router.post("", response_model=InvoiceOut)
+@router.post("", response_model=InvoiceOut, status_code=status.HTTP_201_CREATED)
 async def create_invoice(
     body: InvoiceCreate,
-    claims=Depends(get_current_claims),
+    claims: dict = Depends(require_role("OWNER")),
     db: AsyncSession = Depends(get_db),
 ):
+    # Atomic sequence number prevents duplicate invoice numbers even under concurrent requests from the same org.
+    # Step 1: Verify client belongs to org;
+    # Step 2: Compute totals;
+    # Step 3: Get atomic sequence number;
+    # Step 4: Persist invoice + line items;
+    # Step 5: Return InvoiceOut.
     org_id: uuid.UUID = claims["org_id"]
 
     client = await db.scalar(
@@ -92,9 +95,6 @@ async def create_invoice(
     )
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-    
-    if not client:
-        raise HTTPException(status_code=400, detail="Cannot create invoice for archived client")
 
     subtotal, tax, total = calc_totals(body.items)
     number = await next_invoice_number(db, org_id, body.issue_date.year)
@@ -165,6 +165,10 @@ async def get_invoice_summary(
     claims=Depends(get_current_claims),
     db: AsyncSession = Depends(get_db),
 ):
+    # Aggregates all billing KPIs in one pass so the dashboard loads with a single API call.
+    # Step 1: Query total due, overdue count, paid-last-30d, upcoming due;
+    # Step 2: Rollup 12-month revenue;
+    # Step 3: Return combined summary.
     org_id = claims["org_id"]
     today = date.today()
     thirty_days_ago = today - timedelta(days=30)
@@ -247,6 +251,10 @@ async def get_invoice(
     claims=Depends(get_current_claims),
     db: AsyncSession = Depends(get_db),
 ):
+    # Joins client name into the result so the detail view doesn't need a second request.
+    # Step 1: JOIN invoice with client;
+    # Step 2: Scope to org;
+    # Step 3: Return InvoiceDetail with client_name.
     stmt = (
         select(
             Invoice.id.label("id"),
@@ -279,6 +287,8 @@ async def get_invoice_pdf(
     claims=Depends(get_current_claims),
     db: AsyncSession = Depends(get_db),
 ):
+    # Generates the PDF on demand from live data so it always reflects the current balance.
+    # Step 1: Load invoice + client + items scoped to org; Step 2: Render PDF via ReportLab; Step 3: Return as application/pdf.
     inv = await db.scalar(
         select(Invoice).where(Invoice.id == invoice_id, Invoice.org_id == claims["org_id"])
     )
@@ -330,6 +340,8 @@ async def list_invoices(
     claims=Depends(get_current_claims),
     db: AsyncSession = Depends(get_db),
 ):
+    # Supports sort/filter/pagination so large orgs don't have to load all invoices at once.
+    # Step 1: Scope to org; Step 2: Apply status/client filters; Step 3: Sort and paginate; Step 4: Return InvoiceList rows.
     sort_key = sort.lstrip("-")
     sort_col = ALLOWED_SORTS.get(sort_key, Invoice.issue_date)
     order_by = desc(sort_col) if sort.startswith("-") else sort_col
@@ -364,9 +376,11 @@ async def list_invoices(
 @router.post("/{invoice_id}/send")
 async def mark_invoice_sent(
     invoice_id: uuid.UUID,
-    claims=Depends(get_current_claims),
+    claims: dict = Depends(require_role("OWNER")),
     db: AsyncSession = Depends(get_db),
 ):
+    # Status guard (draft→sent only) prevents accidentally re-sending a paid or overdue invoice.
+    # Step 1: UPDATE status draft→sent scoped to org; Step 2: Raise 400 if no row matched.
     org_id = claims["org_id"]
     stmt = (
         update(Invoice)

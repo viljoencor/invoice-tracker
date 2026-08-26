@@ -36,13 +36,13 @@ def configure_logging() -> None:
             structlog.processors.JSONRenderer(),
         ]
 
-        structlog.configure(
-            processors=processors,  # type: ignore[arg-type]
-            wrapper_class=structlog.stdlib.BoundLogger,
-            context_class=dict,
-            logger_factory=structlog.stdlib.LoggerFactory(),
-            cache_logger_on_first_use=True,
-        )
+    structlog.configure(
+        processors=processors,  # type: ignore[arg-type]
+        wrapper_class=structlog.stdlib.BoundLogger,
+        context_class=dict,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
 
 
 def get_logger(name: str) -> Any:

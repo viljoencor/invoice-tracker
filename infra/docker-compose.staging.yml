@@ -20,6 +20,7 @@ services:
   backend:
     build:
       context: ../apps/backend
+      target: production
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:${DB_PASSWORD}@db:5432/invoicer_staging
       ENVIRONMENT: staging
@@ -56,9 +57,9 @@ services:
   frontend:
     build:
       context: ../apps/frontend
-      target: development
+      target: production
     environment:
-      NUXT_PUBLIC_API_BASE: ${FRONTEND_API_BASE:-http://localhost:8000}
+      NUXT_API_BASE: ${FRONTEND_API_BASE:-http://backend:8000/api/v1}
       NODE_ENV: production
     depends_on:
       backend:

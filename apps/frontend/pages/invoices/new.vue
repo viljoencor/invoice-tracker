@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, reactive, onMounted, watch } from 'vue'
+import { z } from 'zod'
+import type { ClientOut } from '~/types/api'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -12,7 +14,7 @@ type LineItem = {
   tax_rate_bp: number
 }
 
-const clients = ref<any[]>([])
+const clients = ref<ClientOut[]>([])
 const form = reactive<{
   client_id: string
   issue_date: string
@@ -29,11 +31,11 @@ const form = reactive<{
   items: [{ description: 'Service', qty: 1, unit_price_cents: 10000, tax_rate_bp: 1500 }]
 })
 
-const activeClients = computed(() => clients.value.filter(c => !c.is_archived))
+const activeClients = computed(() => clients.value)
 
 onMounted(async () => {
-  clients.value = await get('/clients')
-  form.client_id = clients.value[0]?.id || ''
+  clients.value = await get<ClientOut[]>('/clients')
+  form.client_id = clients.value[0]?.id ?? ''
 })
 
 const addItem = () => {
@@ -70,9 +72,55 @@ const canSubmit = computed(() =>
   form.items.every(i => i.description.trim().length > 0 && i.qty > 0 && i.unit_price_cents >= 0 && i.tax_rate_bp >= 0)
 )
 
+// ── Zod validation ────────────────────────────────────────────────────────────
+const invoiceSchema = z
+  .object({
+    client_id: z.string().min(1, 'Client is required'),
+    issue_date: z.string().min(1, 'Issue date is required'),
+    due_date: z.string().min(1, 'Due date is required'),
+    items: z
+      .array(
+        z.object({
+          description: z.string().min(1, 'Description is required'),
+          qty: z.number().positive('Quantity must be positive'),
+          unit_price_cents: z.number().nonnegative('Unit price cannot be negative'),
+          tax_rate_bp: z.number().nonnegative('Tax rate cannot be negative'),
+        }),
+      )
+      .min(1, 'At least one line item is required'),
+  })
+  .refine((data) => data.due_date >= data.issue_date, {
+    message: 'Due date cannot be before issue date',
+    path: ['due_date'],
+  })
+
+const formErrors = ref<Record<string, string>>({})
+const submitting = ref(false)
+const submitError = ref<string | null>(null)
+
 async function submit() {
-  const inv = await post('/invoices', form)
-  navigateTo(`/invoices/${inv.id}`)
+  formErrors.value = {}
+  submitError.value = null
+  const result = invoiceSchema.safeParse(form)
+  if (!result.success) {
+    const errs: Record<string, string> = {}
+    for (const issue of result.error.issues) {
+      const key = issue.path.join('.')
+      if (!errs[key]) errs[key] = issue.message
+    }
+    formErrors.value = errs
+    return
+  }
+  submitting.value = true
+  try {
+    const inv = await post<{ id: string }>('/invoices', form)
+    navigateTo(`/invoices/${inv.id}`)
+  } catch (e: any) {
+    const detail = e?.data?.detail
+    submitError.value = typeof detail === 'string' ? detail : e?.message || 'Failed to create invoice'
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -119,9 +167,13 @@ async function submit() {
             v-model="form.due_date"
             type="date"
             class="mt-1 w-full p-2 border rounded"
-            aria-describedby="due-hint"
+            :class="{ 'border-red-500': formErrors['due_date'] }"
+            aria-describedby="due-hint due-date-error"
           />
-          <p id="due-hint" class="mt-1 text-xs text-gray-500">
+          <p v-if="formErrors['due_date']" id="due-date-error" class="mt-1 text-xs text-red-600" data-testid="due-date-error">
+            {{ formErrors['due_date'] }}
+          </p>
+          <p v-else id="due-hint" class="mt-1 text-xs text-gray-500">
             Payment is expected on or before this date.
           </p>
         </div>
@@ -244,13 +296,17 @@ async function submit() {
       <!-- Actions -->
       <div class="flex items-center gap-3 pt-2">
         <button
+          type="button"
           @click="submit"
-          :disabled="!canSubmit"
+          :disabled="submitting || !canSubmit"
           class="px-4 py-2 rounded bg-black text-white disabled:opacity-50"
+          data-testid="invoice-submit"
         >
-          Create Invoice
+          {{ submitting ? 'Creating…' : 'Create Invoice' }}
         </button>
-        <span v-if="!canSubmit" class="text-xs text-gray-500">
+        <span v-if="submitError" class="text-xs text-red-600" data-testid="submit-error">{{ submitError }}</span>
+        <span v-else-if="formErrors['items']" class="text-xs text-red-600" data-testid="items-error">{{ formErrors['items'] }}</span>
+        <span v-else-if="!canSubmit" class="text-xs text-gray-500">
           Complete required fields to enable “Create Invoice”.
         </span>
       </div>

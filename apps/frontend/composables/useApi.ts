@@ -1,54 +1,34 @@
 // apps/frontend/composables/useApi.ts
+// All API traffic goes through the Nitro BFF proxy at /api/proxy/*.
+// httpOnly cookies carry the tokens — no client-side token management here.
 export function useApi() {
-  const { public: { apiBase } } = useRuntimeConfig()
-
-  const configured = (apiBase || '').trim()
-  const baseCandidate = configured !== '' ? configured : 'http://localhost:8000/api/v1'
-  let base = baseCandidate.replace(/\/+$/, '')
-  if (!/\/api\/v\d+$/.test(base)) base = `${base}/api/v1`
-
-  if (process.dev) {
-    // eslint-disable-next-line no-console
-    console.log('[useApi] baseURL =', base)
-  }
-
-  const tokenCookie = useCookie<string | null>('token', { sameSite: 'lax' })
-
+  // Step 1: Create base ofetch client pointing at BFF proxy with cookie credentials.
   const client = $fetch.create({
-    baseURL: base,
-    credentials: 'omit',
-    onRequest({ options }) {
-      const headers = new Headers(options.headers as any)
-      if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
-
-      const raw = (tokenCookie.value ?? '').trim()
-      const jwt = raw.replace(/^bearer\s+/i, '').trim()
-      if (jwt) headers.set('Authorization', `Bearer ${jwt}`)
-
-      options.headers = headers
-    },
+    baseURL: '/api/proxy',
+    credentials: 'include', // send httpOnly session cookies
     onResponseError({ response }) {
-      if (response.status === 401) {
-        tokenCookie.value = null
-        return navigateTo('/login')
-      }
+      // Step 2: Redirect to /login when BFF exhausts both access and refresh tokens.
+      if (response.status === 401) void navigateTo('/login')
     },
   })
 
+  // Step 3: Normalise path to always have a leading slash.
   const join = (p: string) => (p.startsWith('/') ? p : `/${p}`)
 
   return {
-    get:   (path: string, opts?: any) => client(join(path), { method: 'GET', ...opts }),
-    post:  (path: string, body?: any, opts?: any) =>
-      client(join(path), { method: 'POST', body, ...opts }),
-    patch: (path: string, body?: any, opts?: any) =>
-      client(join(path), { method: 'PATCH', body, ...opts }),
-    del:   (path: string, opts?: any) => client(join(path), { method: 'DELETE', ...opts }),
+    // GET request forwarded through BFF proxy.
+    get:   <T = unknown>(path: string, opts?: any) => client<T>(join(path), { method: 'GET', ...opts }),
+    // POST request; body serialised to JSON by ofetch.
+    post:  <T = unknown>(path: string, body?: any, opts?: any) => client<T>(join(path), { method: 'POST', body, ...opts }),
+    // PATCH request for partial updates.
+    patch: <T = unknown>(path: string, body?: any, opts?: any) => client<T>(join(path), { method: 'PATCH', body, ...opts }),
+    // DELETE request scoped by path.
+    del:   <T = unknown>(path: string, opts?: any) => client<T>(join(path), { method: 'DELETE', ...opts }),
 
-    // NEW: binary helpers (still send Authorization)
+    // Binary helpers — used for PDF download.
     getArrayBuffer: (path: string, opts?: any) =>
-      client(join(path), { method: 'GET', responseType: 'arrayBuffer', ...opts }),
+      client<ArrayBuffer>(join(path), { method: 'GET', responseType: 'arrayBuffer', ...opts }),
     getBlob: (path: string, opts?: any) =>
-      client(join(path), { method: 'GET', responseType: 'blob', ...opts }),
+      client<Blob>(join(path), { method: 'GET', responseType: 'blob', ...opts }),
   }
 }

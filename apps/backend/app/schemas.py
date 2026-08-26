@@ -2,12 +2,13 @@
 import uuid
 from datetime import date
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 # --- Auth ---
 class TokenPair(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
 
 
@@ -22,6 +23,18 @@ class RegisterRequest(BaseModel):
     password: str
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class UserOut(BaseModel):
+    id: uuid.UUID
+    email: EmailStr
+    name: str
+    org_id: uuid.UUID
+    role: str
+
+
 # --- Clients ---
 class ClientIn(BaseModel):
     name: str
@@ -29,14 +42,19 @@ class ClientIn(BaseModel):
     billing_address: str | None = None
 
 
+class ClientUpdate(BaseModel):
+    name: str | None = None
+    email: EmailStr | None = None
+    billing_address: str | None = None
+
+
 class ClientOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: uuid.UUID
     name: str
     email: EmailStr | None = None
     billing_address: str | None = None
-
-    class Config:
-        from_attributes = True
 
 
 # --- Invoices ---
@@ -57,6 +75,8 @@ class InvoiceCreate(BaseModel):
 
 
 class InvoiceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: uuid.UUID
     number: str
     client_id: uuid.UUID
@@ -68,9 +88,6 @@ class InvoiceOut(BaseModel):
     total_cents: int
     balance_cents: int
     status: str
-
-    class Config:
-        from_attributes = True
 
 
 # Detail view includes client_name
@@ -87,6 +104,8 @@ class PaymentIn(BaseModel):
 
 
 class InvoiceList(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: uuid.UUID
     number: str
     client_name: str
@@ -97,9 +116,6 @@ class InvoiceList(BaseModel):
     status: str
     currency: str
 
-    class Config:
-        from_attributes = True
-
 
 class InvoiceSummary(BaseModel):
     total_due_cents: int
@@ -107,3 +123,22 @@ class InvoiceSummary(BaseModel):
     paid_last_30d_cents: int
     upcoming_due_cents: int
     revenue_by_month: list[dict]  # [{ month: "YYYY-MM", total_cents: int, count: int }]
+
+
+# --- Dashboard ---
+class RevenueMonth(BaseModel):
+    month: str  # "YYYY-MM"
+    total_cents: int
+    count: int
+
+
+class DashboardSummaryOut(BaseModel):
+    total_billed_cents: int
+    total_due_cents: int
+    overdue_count: int
+    pending_count: int
+    bkt_0_30: int | None = None
+    bkt_31_60: int | None = None
+    bkt_61_90: int | None = None
+    bkt_90p: int | None = None
+    revenue_by_month: list[RevenueMonth]

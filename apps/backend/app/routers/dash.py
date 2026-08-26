@@ -3,19 +3,20 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db import async_session_maker
+from ..db import get_db
+from ..schemas import DashboardSummaryOut
 from ..security import get_current_claims
 
 router = APIRouter(prefix="/dash", tags=["dashboard"])
 
 
-async def get_db():
-    async with async_session_maker() as s:
-        yield s
-
-
-@router.get("/summary")
+# TODO: Check if this can be added to a sql function to avoid the need for two queries. Or sql alchemy CTEs. Or maybe a materialized view that is refreshed on invoice/payment changes.
+@router.get("/summary", response_model=DashboardSummaryOut)
 async def summary(claims=Depends(get_current_claims), db: AsyncSession = Depends(get_db)):
+    # Runs all KPI aggregations and 12-month revenue rollup in two queries to minimise round-trips.
+    # Step 1: Run CTE for KPIs (total billed, due, overdue count, aging buckets);
+    # Step 2: Run 12-month revenue rollup;
+    # Step 3: Return merged dict.
     org_id = claims["org_id"]
 
     sql = text("""

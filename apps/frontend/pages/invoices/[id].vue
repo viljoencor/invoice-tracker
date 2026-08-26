@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { InvoiceDetail, PaymentOut } from '~/types/api'
+
 definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
@@ -6,13 +8,13 @@ const id = computed(() => String(route.params.id))
 const api = useApi()
 
 // include refresh so we can re-fetch after a payment
-const { data, pending, error, refresh } = await useAsyncData(
+const { data, pending, error, refresh } = await useAsyncData<InvoiceDetail | null>(
   () => `invoice-${id.value}`,
-  () => api.get(`/invoices/${id.value}`),
-  { default: () => null }
+  () => api.get<InvoiceDetail>(`/invoices/${id.value}`),
+  { default: (): InvoiceDetail | null => null },
 )
 
-const invoice = computed<any | null>(() => data.value ?? null)
+const invoice = computed(() => data.value)
 
 const formatCurrency = (cents: number) =>
   new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format((cents ?? 0) / 100)
@@ -32,6 +34,24 @@ const downloadPdf = async () => {
     setTimeout(() => URL.revokeObjectURL(url), 60_000)
   } finally {
     downloading.value = false
+  }
+}
+
+// ---------- Send Invoice ----------
+const sending = ref(false)
+const sendError = ref<string | null>(null)
+async function sendInvoice() {
+  sending.value = true
+  sendError.value = null
+  try {
+    await api.post(`/invoices/${id.value}/send`, {})
+    await refresh()
+  } catch (e: any) {
+    const detail = e?.data?.detail
+    sendError.value =
+      typeof detail === 'string' ? detail : e?.message || 'Failed to send invoice'
+  } finally {
+    sending.value = false
   }
 }
 
@@ -78,9 +98,10 @@ async function recordPayment() {
       { headers: { 'Idempotency-Key': idem } }
     )
 
-    // reset amount field; refresh invoice details
+    // reset amount field; refresh invoice details and invalidate cross-page caches
     pay.amount_rands = ''
     await refresh()
+    await refreshNuxtData(['invoices', 'dash-summary'])
   } catch (e: any) {
     // surface backend error message if available
     const msg = e?.data?.detail || e?.message || 'Payment failed'
@@ -91,31 +112,52 @@ async function recordPayment() {
 }
 
 // ---------- (Optional) fetch payments list to show history ----------
-const { data: paymentsData, refresh: refreshPayments } = await useAsyncData(
+const { data: paymentsData, refresh: refreshPayments } = await useAsyncData<PaymentOut[]>(
   () => `payments-${id.value}`,
-  () => api.get('/payments', { params: { invoice_id: id.value } }),
-  { default: () => [] }
+  () => api.get<PaymentOut[]>('/payments', { params: { invoice_id: id.value } }),
+  { default: (): PaymentOut[] => [] },
 )
 watch(data, () => refreshPayments()) // refresh payments when invoice refetches
-const payments = computed<any[]>(() => paymentsData.value || [])
+const payments = computed(() => paymentsData.value ?? [])
 </script>
 
 <template>
   <div class="p-6 space-y-6">
-    <div v-if="pending" class="text-sm text-gray-500">Loading…</div>
-    <div v-else-if="error" class="text-sm text-red-600">Failed to load invoice</div>
+    <div v-if="pending" class="text-sm text-gray-500" data-testid="invoice-loading">Loading…</div>
+    <div v-else-if="error" class="text-sm text-red-600" data-testid="invoice-load-error">Failed to load invoice</div>
 
     <div v-else-if="invoice" class="space-y-6">
-      <div class="flex items-center justify-between">
+      <div class="flex items-center justify-between flex-wrap gap-3">
         <h1 class="text-2xl font-semibold">Invoice {{ invoice.number }}</h1>
-        <button
-          @click="downloadPdf"
-          :disabled="downloading"
-          class="px-3 py-2 rounded bg-black text-white disabled:opacity-60"
-        >
-          {{ downloading ? 'Preparing…' : 'Download PDF' }}
-        </button>
+        <div class="flex gap-2">
+          <!-- Send button — only when status is "draft" -->
+          <button
+            v-if="invoice.status === 'draft'"
+            class="px-3 py-2 rounded border border-gray-300 text-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black disabled:opacity-50"
+            :disabled="sending"
+            data-testid="send-invoice-btn"
+            @click="sendInvoice"
+          >
+            {{ sending ? 'Sending…' : 'Mark as Sent' }}
+          </button>
+          <button
+            class="px-3 py-2 rounded bg-black text-white disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-black"
+            :disabled="downloading"
+            data-testid="download-pdf-btn"
+            @click="downloadPdf"
+          >
+            {{ downloading ? 'Preparing…' : 'Download PDF' }}
+          </button>
+        </div>
       </div>
+
+      <!-- Send error -->
+      <div
+        v-if="sendError"
+        class="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700"
+        role="alert"
+        data-testid="send-invoice-error"
+      >{{ sendError }}</div>
 
       <!-- Details -->
       <div class="bg-white p-4 rounded-2xl shadow">
@@ -161,7 +203,7 @@ const payments = computed<any[]>(() => paymentsData.value || [])
       <div class="bg-white p-4 rounded-2xl shadow space-y-3">
         <h2 class="text-lg font-semibold">Record Payment</h2>
 
-        <div v-if="payError" class="text-sm text-red-600">{{ payError }}</div>
+        <div v-if="payError" class="text-sm text-red-600" role="alert" data-testid="pay-error">{{ payError }}</div>
 
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div>
@@ -194,6 +236,7 @@ const payments = computed<any[]>(() => paymentsData.value || [])
             @click="recordPayment"
             :disabled="paying"
             class="px-3 py-2 rounded bg-blue-600 text-white disabled:opacity-60"
+            data-testid="save-payment-btn"
           >
             {{ paying ? 'Saving…' : 'Save Payment' }}
           </button>
@@ -204,7 +247,7 @@ const payments = computed<any[]>(() => paymentsData.value || [])
       <div class="bg-white p-4 rounded-2xl shadow" v-if="payments.length">
         <h2 class="text-lg font-semibold mb-2">Payments</h2>
         <ul class="divide-y">
-          <li v-for="p in payments" :key="p.id" class="py-2 flex items-center justify-between">
+          <li v-for="p in payments" :key="p.id" class="py-2 flex items-center justify-between" :data-testid="`payment-row-${p.id}`">
             <div class="text-sm text-gray-700">
               {{ p.received_at }} · {{ p.method || '—' }} · {{ p.reference || '' }}
             </div>
