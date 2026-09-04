@@ -16,6 +16,7 @@ class TestPayments:
         create_response = await authenticated_client.post(
             "/api/v1/invoices",
             json=mock_invoice_data,
+            headers={"Idempotency-Key": "test-invoice-apply-payment"},
         )
         invoice_id = create_response.json()["id"]
 
@@ -51,6 +52,7 @@ class TestPayments:
         create_response = await authenticated_client.post(
             "/api/v1/invoices",
             json=mock_invoice_data,
+            headers={"Idempotency-Key": "test-invoice-full-amount"},
         )
         invoice_id = create_response.json()["id"]
         total_cents = create_response.json()["total_cents"]
@@ -82,6 +84,7 @@ class TestPayments:
         create_response = await authenticated_client.post(
             "/api/v1/invoices",
             json=mock_invoice_data,
+            headers={"Idempotency-Key": "test-invoice-payment-idem"},
         )
         invoice_id = create_response.json()["id"]
 
@@ -124,6 +127,7 @@ class TestPayments:
         create_response = await authenticated_client.post(
             "/api/v1/invoices",
             json=mock_invoice_data,
+            headers={"Idempotency-Key": "test-invoice-missing-payment-key"},
         )
         invoice_id = create_response.json()["id"]
 
@@ -147,6 +151,7 @@ class TestPayments:
         create_response = await authenticated_client.post(
             "/api/v1/invoices",
             json=mock_invoice_data,
+            headers={"Idempotency-Key": "test-invoice-list-payments"},
         )
         invoice_id = create_response.json()["id"]
 

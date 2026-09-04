@@ -6,6 +6,17 @@ import { config } from '@vue/test-utils'
 import { vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
 
+// happy-dom's AbortSignal doesn't implement the static `.timeout()` helper that
+// several server routes / composables use for request timeouts; polyfill it so
+// those code paths can be exercised under test instead of throwing.
+if (typeof AbortSignal.timeout !== 'function') {
+  AbortSignal.timeout = (ms: number) => {
+    const controller = new AbortController()
+    setTimeout(() => controller.abort(), ms)
+    return controller.signal
+  }
+}
+
 // ── Global component stubs ────────────────────────────────────────────────────
 config.global.stubs = {
   NuxtLink: { template: '<a><slot /></a>' },

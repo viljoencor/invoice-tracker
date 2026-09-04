@@ -145,6 +145,10 @@ markers = [
 # ============================================================================
 [tool.coverage.run]
 source = ["app"]
+# SQLAlchemy's async ORM bridges to its internally-synchronous engine via
+# greenlet_spawn; without this, coverage.py misattributes/undercounts lines
+# executed across that boundary (notably in routers that await ORM calls).
+concurrency = ["greenlet", "thread"]
 omit = [
     "*/tests/*",
     "*/migrations/*",

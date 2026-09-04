@@ -15,6 +15,8 @@ Common issues and their solutions when running or developing Invoice Tracker.
 7. [Cookie or auth-loop issues](#7-cookie-or-auth-loop-issues)
 8. [PDF generation failures](#8-pdf-generation-failures)
 9. [CI/CD pipeline failures](#9-cicd-pipeline-failures)
+10. [Refresh token table growth](#10-refresh-token-table-growth)
+11. [Rancher Desktop: `docker` not found or daemon won't connect](#11-rancher-desktop-docker-not-found-or-daemon-wont-connect)
 
 ---
 
@@ -280,7 +282,62 @@ permissions:
 ```
 Also ensure the repository owner matches the GHCR image path (`ghcr.io/OWNER/...`).
 
-### Symptom: Coverage gate fails (`--cov-fail-under=50`)
-Current actual coverage is **74%** (well above the 50% threshold). If coverage drops below 50%, add tests for the newly added code before merging.
+### Symptom: Coverage gate fails (`--cov-fail-under=70`)
+Current actual coverage is **~89%** (well above the 70% threshold). If coverage drops below 70%, add tests for the newly added code before merging. Note that `[tool.coverage.run]` sets `concurrency = ["greenlet", "thread"]` — this is required for coverage.py to correctly attribute lines executed through SQLAlchemy's async ORM; removing it will silently undercount router coverage without failing the gate.
 
-Frontend coverage thresholds are in `apps/frontend/vitest.config.ts` (50% lines/statements/functions, 40% branches).
+Frontend coverage thresholds are in `apps/frontend/vitest.config.ts` (50% lines/statements/functions, 40% branches). The `coverage.include` list covers `pages/**` and `server/api/**` in addition to composables/components/middleware/stores/server-utils — keep new server routes and pages inside this scope so regressions there are actually measured.
+
+---
+
+## 10. Refresh token table growth
+
+### Symptom
+The `refresh_tokens` table grows steadily over time even though users log out normally.
+
+### Cause
+Login/refresh/logout only ever mark a row `revoked = true`; nothing deletes old rows automatically apart from an opportunistic cleanup of the *current user's* own expired/revoked tokens at login time.
+
+### Fix
+Run the cleanup script periodically (cron / scheduled task) to delete revoked or expired rows for all users:
+```bash
+cd apps/backend
+python -m app.scripts.cleanup_tokens
+```
+This is safe to run at any time — it only ever deletes rows that are already `revoked = true` or past `expires_at`.
+
+---
+
+## 11. Rancher Desktop: `docker` not found or daemon won't connect
+
+This project's Compose setup (`infra/docker-compose.yml`) works with **Rancher Desktop** as a drop-in replacement for Docker Desktop, but two Rancher-specific gotchas are easy to hit on first install.
+
+### Symptom A: `docker : The term 'docker' is not recognized...`
+
+### Cause
+Rancher Desktop's installer adds its CLI directory (`...\Rancher Desktop\resources\resources\win32\bin`) to your **User** PATH, but any terminal window opened *before* installation finished still has the old PATH cached in memory.
+
+### Fix
+Close and reopen your terminal (or restart VS Code) so it picks up the updated PATH, then verify:
+```powershell
+docker --version
+docker compose version
+```
+
+### Symptom B: `failed to connect to the docker API at npipe:////./pipe/docker_engine`
+
+### Cause
+Rancher Desktop's background log (`%LOCALAPPDATA%\rancher-desktop\logs\background.log`) shows the real failure, typically something like:
+```
+Rancher Desktop was unable to start: FetchError: request to https://127.0.0.1:6443/api/v1/nodes failed, reason: read ECONNRESET
+```
+By default Rancher Desktop also starts a Kubernetes (k3s) cluster and ties the container-engine startup to the Kubernetes startup sequence. If k3s fails to come up (resource limits, WSL networking hiccups, first-run timing), the container engine — and the named pipe `docker` needs — never gets created either. This project's Compose file does not use Kubernetes at all.
+
+### Fix
+1. Open the Rancher Desktop app → **Preferences → Kubernetes** → uncheck **Enable Kubernetes** → **Apply**.
+2. Under **Preferences → Container Engine**, select **dockerd (moby)** (most directly compatible with plain `docker compose`; containerd + `nerdctl` also works but isn't necessary here).
+3. Wait for the Rancher Desktop window to show a green **Running** status.
+4. Open a **new** terminal and confirm:
+   ```powershell
+   docker info
+   ```
+   Once this returns without error, the Quick Start steps in the main [README](../README.md#run-the-application-docker) work unmodified.

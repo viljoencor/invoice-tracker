@@ -21,11 +21,19 @@ class TestInvoiceRBAC:
     async def test_create_invoice_member_forbidden(
         self, member_authenticated_client, mock_invoice_data
     ):
-        resp = await member_authenticated_client.post("/api/v1/invoices", json=mock_invoice_data)
+        resp = await member_authenticated_client.post(
+            "/api/v1/invoices",
+            json=mock_invoice_data,
+            headers={"Idempotency-Key": "rbac-create-member-forbidden"},
+        )
         assert resp.status_code == 403
 
     async def test_create_invoice_unauthenticated(self, client: AsyncClient, mock_invoice_data):
-        resp = await client.post("/api/v1/invoices", json=mock_invoice_data)
+        resp = await client.post(
+            "/api/v1/invoices",
+            json=mock_invoice_data,
+            headers={"Idempotency-Key": "rbac-create-unauthenticated"},
+        )
         assert resp.status_code == 403
 
     async def test_list_invoices_member_allowed(self, member_authenticated_client):
@@ -37,7 +45,11 @@ class TestInvoiceRBAC:
         self, authenticated_client: AsyncClient, member_authenticated_client, mock_invoice_data
     ):
         """OWNER creates invoice, MEMBER cannot mark it sent."""
-        create_resp = await authenticated_client.post("/api/v1/invoices", json=mock_invoice_data)
+        create_resp = await authenticated_client.post(
+            "/api/v1/invoices",
+            json=mock_invoice_data,
+            headers={"Idempotency-Key": "rbac-mark-sent-forbidden"},
+        )
         assert create_resp.status_code == 201
         invoice_id = create_resp.json()["id"]
 
@@ -48,7 +60,11 @@ class TestInvoiceRBAC:
         self, authenticated_client: AsyncClient, mock_invoice_data
     ):
         """OWNER can mark an invoice as sent."""
-        create_resp = await authenticated_client.post("/api/v1/invoices", json=mock_invoice_data)
+        create_resp = await authenticated_client.post(
+            "/api/v1/invoices",
+            json=mock_invoice_data,
+            headers={"Idempotency-Key": "rbac-mark-sent-allowed"},
+        )
         invoice_id = create_resp.json()["id"]
 
         resp = await authenticated_client.post(f"/api/v1/invoices/{invoice_id}/send")
@@ -68,7 +84,11 @@ class TestPaymentRBAC:
         """MEMBER cannot apply payments."""
         from datetime import date
 
-        create_resp = await authenticated_client.post("/api/v1/invoices", json=mock_invoice_data)
+        create_resp = await authenticated_client.post(
+            "/api/v1/invoices",
+            json=mock_invoice_data,
+            headers={"Idempotency-Key": "rbac-apply-payment-forbidden"},
+        )
         invoice_id = create_resp.json()["id"]
         await authenticated_client.post(f"/api/v1/invoices/{invoice_id}/send")
 
@@ -91,7 +111,11 @@ class TestPaymentRBAC:
         mock_invoice_data,
     ):
         """MEMBER can read payments."""
-        create_resp = await authenticated_client.post("/api/v1/invoices", json=mock_invoice_data)
+        create_resp = await authenticated_client.post(
+            "/api/v1/invoices",
+            json=mock_invoice_data,
+            headers={"Idempotency-Key": "rbac-list-payments-allowed"},
+        )
         invoice_id = create_resp.json()["id"]
 
         resp = await member_authenticated_client.get(f"/api/v1/payments?invoice_id={invoice_id}")

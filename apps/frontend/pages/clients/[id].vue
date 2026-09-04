@@ -67,11 +67,7 @@ const onSave = handleSubmit(async (values) => {
     await refresh()
     editing.value = false
   } catch (e: any) {
-    const detail = e?.data?.detail
-    saveError.value =
-      typeof detail === 'string'
-        ? detail
-        : e?.message || 'Save failed. Please try again.'
+    saveError.value = extractErrorMessage(e, 'Save failed. Please try again.')
   } finally {
     saving.value = false
   }
@@ -89,16 +85,14 @@ async function onDelete() {
     navigateTo('/clients')
   } catch (e: any) {
     const status = e?.status ?? e?.statusCode
-    const detail = e?.data?.detail
     if (status === 409) {
       deleteError.value = 'This client has invoices and cannot be deleted.'
     } else if (status === 403 || status === 401) {
       deleteError.value = 'You do not have permission to delete this client.'
     } else if (status === 404) {
-      deleteError.value = 'Client not found — it may have already been deleted.'
+      deleteError.value = 'Client not found ï¿½ it may have already been deleted.'
     } else {
-      deleteError.value =
-        typeof detail === 'string' ? detail : e?.message || 'Delete failed. Please try again.'
+      deleteError.value = extractErrorMessage(e, 'Delete failed. Please try again.')
     }
     confirmDelete.value = false
   } finally {
@@ -164,11 +158,11 @@ async function onDelete() {
           </div>
           <div class="p-4 sm:border-r">
             <dt class="text-xs text-gray-500 uppercase tracking-wide">Email</dt>
-            <dd class="mt-1" data-testid="client-detail-email">{{ client.email ?? '—' }}</dd>
+            <dd class="mt-1" data-testid="client-detail-email">{{ client.email ?? 'ï¿½' }}</dd>
           </div>
           <div class="p-4">
             <dt class="text-xs text-gray-500 uppercase tracking-wide">Billing Address</dt>
-            <dd class="mt-1" data-testid="client-detail-address">{{ client.billing_address ?? '—' }}</dd>
+            <dd class="mt-1" data-testid="client-detail-address">{{ client.billing_address ?? 'ï¿½' }}</dd>
           </div>
         </dl>
       </div>
@@ -227,7 +221,7 @@ async function onDelete() {
             :disabled="saving"
             class="px-4 py-2 rounded bg-black text-white disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-black"
             data-testid="client-save-btn"
-          >{{ saving ? 'Saving…' : 'Save Changes' }}</button>
+          >{{ saving ? 'Savingï¿½' : 'Save Changes' }}</button>
           <button
             type="button"
             class="px-4 py-2 rounded border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black"
@@ -262,7 +256,7 @@ async function onDelete() {
               data-testid="delete-confirm-btn"
               :disabled="deleting"
               @click="onDelete"
-            >{{ deleting ? 'Deleting…' : 'Yes, delete' }}</button>
+            >{{ deleting ? 'Deletingï¿½' : 'Yes, delete' }}</button>
           </div>
         </div>
       </div>

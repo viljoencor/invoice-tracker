@@ -1,18 +1,29 @@
 <template>
   <div class="min-h-screen flex items-center justify-center p-6">
     <div class="w-full max-w-md space-y-6">
-      <h1 class="text-2xl font-semibold text-center">Sign in</h1>
+      <h1 class="text-2xl font-semibold text-center">Create your account</h1>
 
       <form class="space-y-4" @submit.prevent="onSubmit">
+        <div>
+          <label class="block text-sm mb-1">Name</label>
+          <input
+            v-model="name"
+            type="text"
+            required
+            data-testid="register-name"
+            class="w-full border rounded px-3 py-2"
+            placeholder="Jane Doe"
+          />
+        </div>
         <div>
           <label class="block text-sm mb-1">Email</label>
           <input
             v-model="email"
             type="email"
             required
-            data-testid="login-email"
+            data-testid="register-email"
             class="w-full border rounded px-3 py-2"
-            placeholder="admin@example.com"
+            placeholder="jane@example.com"
           />
         </div>
         <div>
@@ -21,7 +32,8 @@
             v-model="password"
             :type="show ? 'text' : 'password'"
             required
-            data-testid="login-password"
+            minlength="8"
+            data-testid="register-password"
             class="w-full border rounded px-3 py-2"
             placeholder="••••••••"
           />
@@ -34,19 +46,19 @@
         <button
           type="submit"
           :disabled="loading"
-          data-testid="login-submit"
+          data-testid="register-submit"
           class="w-full bg-black text-white rounded px-4 py-2 disabled:opacity-50"
         >
-          {{ loading ? 'Signing in…' : 'Sign in' }}
+          {{ loading ? 'Creating account…' : 'Create account' }}
         </button>
 
-        <p v-if="error" data-testid="login-error" class="text-red-600 text-sm">{{ error }}</p>
+        <p v-if="error" data-testid="register-error" class="text-red-600 text-sm">{{ error }}</p>
       </form>
 
       <p class="text-sm text-center text-gray-600">
-        Don't have an account?
-        <NuxtLink to="/register" data-testid="login-register-link" class="font-medium text-black underline">
-          Create one
+        Already have an account?
+        <NuxtLink to="/login" data-testid="register-login-link" class="font-medium text-black underline">
+          Sign in
         </NuxtLink>
       </p>
     </div>
@@ -58,6 +70,7 @@ import { ref } from 'vue'
 
 definePageMeta({ layout: 'auth', middleware: 'auth' })
 
+const name = ref('')
 const email = ref('')
 const password = ref('')
 const show = ref(false)
@@ -68,14 +81,15 @@ async function onSubmit() {
   loading.value = true
   error.value = null
   try {
-    // BFF sets httpOnly cookies — no token handling in client code
-    await $fetch('/api/auth/login', {
+    // BFF sets httpOnly cookies and signs the new account in immediately — no
+    // token handling in client code, mirroring the login flow.
+    await $fetch('/api/auth/register', {
       method: 'POST',
-      body: { email: email.value, password: password.value },
+      body: { name: name.value, email: email.value, password: password.value },
       credentials: 'include',
     })
     // Hard navigation so the browser sends the new session cookie in the SSR request,
-    // bypassing stale useCookie state that persists from the server-rendered login page.
+    // bypassing stale useCookie state that persists from the server-rendered page.
     window.location.href = '/'
   } catch (e: any) {
     error.value =
@@ -83,7 +97,7 @@ async function onSubmit() {
       e?.data?.detail?.message ||
       e?.data?.detail ||
       e?.message ||
-      'Login failed'
+      'Registration failed'
   } finally {
     loading.value = false
   }

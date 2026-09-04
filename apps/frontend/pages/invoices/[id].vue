@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, reactive, ref, watch } from 'vue'
 import type { InvoiceDetail, PaymentOut } from '~/types/api'
 
 definePageMeta({ middleware: 'auth' })
@@ -47,9 +48,7 @@ async function sendInvoice() {
     await api.post(`/invoices/${id.value}/send`, {})
     await refresh()
   } catch (e: any) {
-    const detail = e?.data?.detail
-    sendError.value =
-      typeof detail === 'string' ? detail : e?.message || 'Failed to send invoice'
+    sendError.value = extractErrorMessage(e, 'Failed to send invoice')
   } finally {
     sending.value = false
   }
@@ -103,9 +102,7 @@ async function recordPayment() {
     await refresh()
     await refreshNuxtData(['invoices', 'dash-summary'])
   } catch (e: any) {
-    // surface backend error message if available
-    const msg = e?.data?.detail || e?.message || 'Payment failed'
-    payError.value = String(msg)
+    payError.value = extractErrorMessage(e, 'Payment failed')
   } finally {
     paying.value = false
   }

@@ -7,7 +7,7 @@ export default defineNuxtRouteMiddleware((to) => {
   // hold a stale null from before the session cookie was set by the BFF login response.
   const hasSession = document.cookie.split(';').some(c => c.trim().startsWith('session=1'))
 
-  if (to.path === '/login') {
+  if (to.path === '/login' || to.path === '/register') {
     if (hasSession) return navigateTo('/')
     return
   }

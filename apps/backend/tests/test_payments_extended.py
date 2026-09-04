@@ -1,5 +1,6 @@
 """Extended payment tests — overpayment, sequential balance integrity, status transitions."""
 
+import uuid
 from datetime import date
 
 import pytest
@@ -11,7 +12,10 @@ from httpx import AsyncClient
 # ---------------------------------------------------------------------------
 async def _create_and_send_invoice(client: AsyncClient, mock_invoice_data: dict) -> tuple:
     """Create an invoice via the API, mark it sent, return (invoice_id, total_cents)."""
-    resp = await client.post("/api/v1/invoices", json=mock_invoice_data)
+    idem_key = f"test-extended-{uuid.uuid4()}"
+    resp = await client.post(
+        "/api/v1/invoices", json=mock_invoice_data, headers={"Idempotency-Key": idem_key}
+    )
     assert resp.status_code == 201, resp.text
     data = resp.json()
     invoice_id = data["id"]

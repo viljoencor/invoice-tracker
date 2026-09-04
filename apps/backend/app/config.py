@@ -3,6 +3,8 @@ import os
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+DEFAULT_DATABASE_URL = "postgresql+asyncpg://postgres:postgres@db:5432/invoicer"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -17,7 +19,7 @@ class Settings(BaseSettings):
     )
 
     # Database
-    database_url: str = "postgresql+asyncpg://postgres:postgres@db:5432/invoicer"
+    database_url: str = Field(default=DEFAULT_DATABASE_URL)
     db_pool_size: int = Field(default=20, ge=1, le=100)
     db_max_overflow: int = Field(default=10, ge=0, le=50)
     db_pool_recycle: int = Field(default=3600, ge=300)  # seconds
@@ -44,6 +46,19 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = Field(default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
     log_json_format: bool = True
+
+    @field_validator("database_url")
+    @classmethod
+    def validate_database_url(cls, v: str, info) -> str:
+        env = info.data.get("environment", os.getenv("ENVIRONMENT", "development"))
+
+        if env == "production" and v == DEFAULT_DATABASE_URL:
+            raise ValueError(
+                "DATABASE_URL must be set explicitly in production. "
+                "The default development credentials (postgres:postgres) are not permitted."
+            )
+
+        return v
 
     @field_validator("jwt_secret")
     @classmethod

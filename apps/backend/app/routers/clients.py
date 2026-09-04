@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
@@ -6,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db import get_db
-from ..models import Client
+from ..models import Client, Invoice
 from ..schemas import ClientIn, ClientOut, ClientUpdate
 from ..security import get_current_claims, require_role
 
@@ -40,10 +41,10 @@ async def list_clients(
     db: AsyncSession = Depends(get_db),
 ):
     # Supports name/email search so the invoice form can find clients without loading all of them.
-    # Step 1: Scope to org;
+    # Step 1: Scope to org and exclude soft-deleted rows;
     # Step 2: Apply optional case-insensitive name/email LIKE filter;
     # Step 3: Order newest-first.
-    stmt = select(Client).where(Client.org_id == claims["org_id"])
+    stmt = select(Client).where(Client.org_id == claims["org_id"], Client.deleted_at.is_(None))
     if q:
         search = f"%{q.lower()}%"
         stmt = stmt.where(
@@ -64,11 +65,15 @@ async def get_client(
     db: AsyncSession = Depends(get_db),
 ):
     # Scoped to org_id so users can never read another organisation's clients.
-    # Step 1: Fetch client scoped to org;
+    # Step 1: Fetch client scoped to org, excluding soft-deleted rows;
     # Step 2: Raise 404 if not found.
     c = (
         await db.execute(
-            select(Client).where(Client.id == client_id, Client.org_id == claims["org_id"])
+            select(Client).where(
+                Client.id == client_id,
+                Client.org_id == claims["org_id"],
+                Client.deleted_at.is_(None),
+            )
         )
     ).scalar_one_or_none()
     if not c:
@@ -84,12 +89,16 @@ async def update_client(
     db: AsyncSession = Depends(get_db),
 ):
     # PATCH so the frontend only needs to send changed fields, not the full record.
-    # Step 1: Fetch client scoped to org;
+    # Step 1: Fetch client scoped to org, excluding soft-deleted rows;
     # Step 2: Apply partial field update;
     # Step 3: Commit and return refreshed row.
     c = (
         await db.execute(
-            select(Client).where(Client.id == client_id, Client.org_id == claims["org_id"])
+            select(Client).where(
+                Client.id == client_id,
+                Client.org_id == claims["org_id"],
+                Client.deleted_at.is_(None),
+            )
         )
     ).scalar_one_or_none()
     if not c:
@@ -107,19 +116,31 @@ async def delete_client(
     claims: dict = Depends(require_role("OWNER")),
     db: AsyncSession = Depends(get_db),
 ):
-    # The 409 guard prevents orphaned invoices referencing a deleted client.
-    # Step 1: Fetch client scoped to org;
-    # Step 2: Delete;
-    # Step 3: Rollback and raise 409 if FK constraint fires.
+    # Soft delete preserves an audit trail (deleted_at) instead of destroying the row.
+    # Step 1: Fetch client scoped to org, excluding already-deleted rows;
+    # Step 2: Reject if the client has any invoices (soft delete no longer triggers the FK
+    #         RESTRICT that used to guard this, so the check is now explicit);
+    # Step 3: Set deleted_at.
     c = (
         await db.execute(
-            select(Client).where(Client.id == client_id, Client.org_id == claims["org_id"])
+            select(Client).where(
+                Client.id == client_id,
+                Client.org_id == claims["org_id"],
+                Client.deleted_at.is_(None),
+            )
         )
     ).scalar_one_or_none()
     if not c:
         raise HTTPException(status_code=404, detail="Client not found")
+
+    has_invoices = await db.scalar(
+        select(Invoice.id).where(Invoice.client_id == client_id).limit(1)
+    )
+    if has_invoices:
+        raise HTTPException(status_code=409, detail="Client has invoices and cannot be deleted")
+
     try:
-        await db.delete(c)
+        c.deleted_at = datetime.now(UTC)
         await db.commit()
     except IntegrityError:
         await db.rollback()
