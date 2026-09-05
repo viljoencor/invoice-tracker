@@ -13,6 +13,7 @@ class TestInvoices:
         response = await authenticated_client.post(
             "/api/v1/invoices",
             json=mock_invoice_data,
+            headers={"Idempotency-Key": "test-invoice-create"},
         )
 
         assert response.status_code == 201
@@ -30,9 +31,47 @@ class TestInvoices:
         response = await authenticated_client.post(
             "/api/v1/invoices",
             json=mock_invoice_data,
+            headers={"Idempotency-Key": "test-invoice-invalid-client"},
         )
 
         assert response.status_code == 404
+
+    async def test_create_invoice_missing_idempotency_key(
+        self, authenticated_client: AsyncClient, mock_invoice_data
+    ):
+        """POST /invoices without an Idempotency-Key header is rejected."""
+        response = await authenticated_client.post(
+            "/api/v1/invoices",
+            json=mock_invoice_data,
+        )
+        assert response.status_code == 400
+        assert "idempotency" in response.json()["detail"].lower()
+
+    async def test_create_invoice_idempotent_retry_returns_same_invoice(
+        self, authenticated_client: AsyncClient, mock_invoice_data
+    ):
+        """A repeated request with the same Idempotency-Key returns the original invoice
+        instead of creating a duplicate (mirrors the payments endpoint's guarantee)."""
+        headers = {"Idempotency-Key": "test-invoice-retry-same-key"}
+
+        first = await authenticated_client.post(
+            "/api/v1/invoices", json=mock_invoice_data, headers=headers
+        )
+        assert first.status_code == 201
+        first_id = first.json()["id"]
+        first_number = first.json()["number"]
+
+        second = await authenticated_client.post(
+            "/api/v1/invoices", json=mock_invoice_data, headers=headers
+        )
+        assert second.status_code == 201
+        assert second.json()["id"] == first_id
+        assert second.json()["number"] == first_number
+
+        # Confirm no duplicate was persisted.
+        list_resp = await authenticated_client.get("/api/v1/invoices")
+        matching = [inv for inv in list_resp.json() if inv["id"] == first_id]
+        assert len(matching) == 1
 
     async def test_list_invoices(self, authenticated_client: AsyncClient):
         """Test listing invoices."""
@@ -48,6 +87,7 @@ class TestInvoices:
         create_response = await authenticated_client.post(
             "/api/v1/invoices",
             json=mock_invoice_data,
+            headers={"Idempotency-Key": "test-invoice-detail"},
         )
         invoice_id = create_response.json()["id"]
 
@@ -65,6 +105,7 @@ class TestInvoices:
         create_response = await authenticated_client.post(
             "/api/v1/invoices",
             json=mock_invoice_data,
+            headers={"Idempotency-Key": "test-invoice-pdf"},
         )
         invoice_id = create_response.json()["id"]
 
@@ -95,6 +136,7 @@ class TestInvoices:
         create_response = await authenticated_client.post(
             "/api/v1/invoices",
             json=mock_invoice_data,
+            headers={"Idempotency-Key": "test-invoice-mark-sent"},
         )
         invoice_id = create_response.json()["id"]
 

@@ -46,7 +46,7 @@ function recover() {
         Try again
       </button>
       <NuxtLink
-        to="/dashboard"
+        to="/"
         data-testid="error-boundary-home"
         class="px-4 py-2 rounded border border-gray-300 text-sm"
       >

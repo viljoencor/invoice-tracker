@@ -113,11 +113,15 @@ async function submit() {
   }
   submitting.value = true
   try {
-    const inv = await post<{ id: string }>('/invoices', form)
+    // Idempotency-Key protects against double-submit / network-retry duplicate invoices,
+    // mirroring the payment-recording pattern.
+    const idem = crypto.randomUUID()
+    const inv = await post<{ id: string }>('/invoices', form, {
+      headers: { 'Idempotency-Key': idem },
+    })
     navigateTo(`/invoices/${inv.id}`)
   } catch (e: any) {
-    const detail = e?.data?.detail
-    submitError.value = typeof detail === 'string' ? detail : e?.message || 'Failed to create invoice'
+    submitError.value = extractErrorMessage(e, 'Failed to create invoice')
   } finally {
     submitting.value = false
   }

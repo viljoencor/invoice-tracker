@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
@@ -76,8 +76,18 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
 
     org_id, role = row[0], row[1]
 
+    # Opportunistic cleanup: prevents revoked/expired rows from a chatty user (frequent
+    # login/refresh cycles) accumulating indefinitely between scheduled cleanup runs.
+    now = datetime.now(UTC)
+    await db.execute(
+        delete(RefreshToken).where(
+            RefreshToken.user_id == user.id,
+            or_(RefreshToken.revoked.is_(True), RefreshToken.expires_at < now),
+        )
+    )
+
     raw_refresh, token_hash = generate_refresh_token()
-    expires = datetime.now(UTC) + timedelta(minutes=settings.refresh_token_expire_minutes)
+    expires = now + timedelta(minutes=settings.refresh_token_expire_minutes)
     db.add(RefreshToken(token_hash=token_hash, user_id=user.id, org_id=org_id, expires_at=expires))
     await db.commit()
 

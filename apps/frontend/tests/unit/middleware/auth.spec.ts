@@ -32,4 +32,16 @@ describe('auth middleware', () => {
     expect(result).toBeUndefined()
     expect(mockNavigateTo).not.toHaveBeenCalled()
   })
+
+  it('redirects to / when session cookie is "1" and route is /register', () => {
+    document.cookie = 'session=1'
+    authMiddleware({ path: '/register' } as any, {} as any)
+    expect(mockNavigateTo).toHaveBeenCalledWith('/')
+  })
+
+  it('does not redirect when visiting /register with no token', () => {
+    const result = authMiddleware({ path: '/register' } as any, {} as any)
+    expect(result).toBeUndefined()
+    expect(mockNavigateTo).not.toHaveBeenCalled()
+  })
 })

@@ -97,6 +97,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Dependency vulnerability scan (npm audit)
+        # Blocks on fixable high/critical vulnerabilities in production dependencies;
+        # dev-only tooling vulnerabilities are audited separately and don't block.
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Generate Nuxt type stubs
         run: npx nuxt prepare
 

@@ -107,6 +107,8 @@ class Client(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
+    # Soft delete: preserves an audit trail instead of destroying the row outright.
+    deleted_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), default=None)
 
     __table_args__ = (Index("idx_clients_org", "org_id"),)
 
@@ -134,9 +136,13 @@ class Invoice(Base):
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now()
     )
+    # Nullable: only required going forward; lets a network retry / double-submit return the
+    # original invoice instead of silently creating a duplicate billing document.
+    idempotency_key: Mapped[str | None] = mapped_column(String(100))
 
     __table_args__ = (
         UniqueConstraint("org_id", "number", name="uq_invoices_org_number"),
+        UniqueConstraint("org_id", "idempotency_key", name="uq_invoices_org_idem"),
         Index("idx_invoices_org_status_due", "org_id", "status", "due_date"),
     )
 

@@ -3,12 +3,14 @@ import uuid
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from sqlalchemy import desc, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config import settings
 from ..db import get_db
+from ..middleware import limiter
 from ..models import Client, Invoice, InvoiceItem
 from ..schemas import (
     InvoiceCreate,
@@ -77,21 +79,53 @@ async def next_invoice_number(db: AsyncSession, org_id: uuid.UUID, year: int) ->
 
 
 @router.post("", response_model=InvoiceOut, status_code=status.HTTP_201_CREATED)
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
 async def create_invoice(
+    request: Request,  # noqa: ARG001
     body: InvoiceCreate,
     claims: dict = Depends(require_role("OWNER")),
     db: AsyncSession = Depends(get_db),
+    idemp_std: str | None = Header(default=None, alias="Idempotency-Key"),
+    idemp_alt: str | None = Header(default=None, alias="idempotency-key"),
 ):
-    # Atomic sequence number prevents duplicate invoice numbers even under concurrent requests from the same org.
-    # Step 1: Verify client belongs to org;
-    # Step 2: Compute totals;
-    # Step 3: Get atomic sequence number;
-    # Step 4: Persist invoice + line items;
-    # Step 5: Return InvoiceOut.
+    # Idempotency key mirrors the payments endpoint: a network retry or double-click on submit
+    # must return the original invoice, never silently create a duplicate billing document.
+    # Step 1: Require idempotency key;
+    # Step 2: Return existing invoice if the key was already used;
+    # Step 3: Verify client belongs to org;
+    # Step 4: Compute totals;
+    # Step 5: Get atomic sequence number;
+    # Step 6: Persist invoice + line items (unique-constraint fallback handles races);
+    # Step 7: Return InvoiceOut.
     org_id: uuid.UUID = claims["org_id"]
+    idempotency_key = idemp_std or idemp_alt
+    if not idempotency_key:
+        raise HTTPException(status_code=400, detail="Missing Idempotency-Key header")
+
+    existing = await db.scalar(
+        select(Invoice).where(Invoice.org_id == org_id, Invoice.idempotency_key == idempotency_key)
+    )
+    if existing:
+        return InvoiceOut(
+            id=existing.id,
+            number=existing.number,
+            client_id=existing.client_id,
+            issue_date=existing.issue_date,
+            due_date=existing.due_date,
+            currency=existing.currency,
+            subtotal_cents=existing.subtotal_cents,
+            tax_cents=existing.tax_cents,
+            total_cents=existing.total_cents,
+            balance_cents=existing.balance_cents,
+            status=existing.status,
+        )
 
     client = await db.scalar(
-        select(Client.id).where(Client.id == body.client_id, Client.org_id == org_id)
+        select(Client.id).where(
+            Client.id == body.client_id,
+            Client.org_id == org_id,
+            Client.deleted_at.is_(None),
+        )
     )
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
@@ -114,6 +148,7 @@ async def create_invoice(
         status="draft",  # lower-case to match filters
         notes=body.notes,
         meta={},
+        idempotency_key=idempotency_key,
     )
     db.add(inv)
 
@@ -139,6 +174,28 @@ async def create_invoice(
         # await db.refresh(inv)  # not needed since we return manually
     except IntegrityError as e:
         await db.rollback()
+        if "uq_invoices_org_idem" in str(e.orig):
+            # Two requests with the same idempotency key raced past the pre-check.
+            existing_after_conflict = await db.scalar(
+                select(Invoice).where(
+                    Invoice.org_id == org_id, Invoice.idempotency_key == idempotency_key
+                )
+            )
+            if existing_after_conflict:
+                return InvoiceOut(
+                    id=existing_after_conflict.id,
+                    number=existing_after_conflict.number,
+                    client_id=existing_after_conflict.client_id,
+                    issue_date=existing_after_conflict.issue_date,
+                    due_date=existing_after_conflict.due_date,
+                    currency=existing_after_conflict.currency,
+                    subtotal_cents=existing_after_conflict.subtotal_cents,
+                    tax_cents=existing_after_conflict.tax_cents,
+                    total_cents=existing_after_conflict.total_cents,
+                    balance_cents=existing_after_conflict.balance_cents,
+                    status=existing_after_conflict.status,
+                )
+            raise HTTPException(status_code=409, detail="Invoice conflict") from None
         if "uq_invoices_org_number" in str(e.orig):
             raise HTTPException(
                 status_code=409, detail=f"Invoice number already exists: {number}"
@@ -335,7 +392,7 @@ async def list_invoices(
     status: str | None = None,
     client_id: uuid.UUID | None = None,
     sort: str = "-issue_date",
-    limit: int = Query(50, le=10000),
+    limit: int = Query(50, le=200),
     offset: int = Query(0, ge=0),
     claims=Depends(get_current_claims),
     db: AsyncSession = Depends(get_db),

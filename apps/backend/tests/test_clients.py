@@ -151,6 +151,23 @@ class TestClientCRUD:
         resp = await authenticated_client.delete(f"/api/v1/clients/{client_with_invoice.id}")
         assert resp.status_code == 409
 
+    async def test_delete_client_is_soft_delete(
+        self, authenticated_client: AsyncClient, test_client_record
+    ):
+        """Deletion sets deleted_at rather than removing the row, and the client
+        disappears from both list and search results."""
+        resp = await authenticated_client.delete(f"/api/v1/clients/{test_client_record.id}")
+        assert resp.status_code == 204
+
+        list_resp = await authenticated_client.get("/api/v1/clients")
+        assert list_resp.status_code == 200
+        assert all(c["id"] != str(test_client_record.id) for c in list_resp.json())
+
+        search_resp = await authenticated_client.get(
+            f"/api/v1/clients?q={test_client_record.name.split()[0]}"
+        )
+        assert all(c["id"] != str(test_client_record.id) for c in search_resp.json())
+
 
 @pytest.mark.unit
 class TestClientSearch:

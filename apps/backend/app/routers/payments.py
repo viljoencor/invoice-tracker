@@ -1,11 +1,13 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import desc, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config import settings
 from ..db import engine, get_db
+from ..middleware import limiter
 from ..models import Invoice, Payment
 from ..schemas import PaymentIn
 from ..security import get_current_claims, require_role
@@ -18,7 +20,9 @@ _USE_ROW_LOCK: bool = engine.dialect.name != "sqlite"
 
 
 @router.post("")
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
 async def apply_payment(
+    request: Request,  # noqa: ARG001
     body: PaymentIn,
     claims: dict = Depends(require_role("OWNER")),
     db: AsyncSession = Depends(get_db),

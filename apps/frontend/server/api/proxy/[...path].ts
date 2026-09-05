@@ -12,7 +12,7 @@ import { setAuthCookies, clearAuthCookies } from '../../utils/cookies'
 import { getBackendBase } from '../../utils/backend'
 
 /** Only these path prefixes are permitted through the proxy (no open proxy). */
-const ALLOWED_PREFIXES = [
+export const ALLOWED_PREFIXES = [
   '/clients',
   '/invoices',
   '/payments',
@@ -20,8 +20,10 @@ const ALLOWED_PREFIXES = [
   '/auth/me',
 ]
 
-/** Returns true when the upstream path is on the explicit allow-list (no open proxy). */
-function isAllowedPath(path: string): boolean {
+/** Returns true when the upstream path is on the explicit allow-list (no open proxy).
+ * Exported (like checkOriginMatchesHost) so this security-critical check can be
+ * unit-tested directly without constructing a full H3 event. */
+export function isAllowedPath(path: string): boolean {
   // Step 1: Match exact prefix, prefix + slash, or prefix + query string.
   return ALLOWED_PREFIXES.some(
     (prefix) =>

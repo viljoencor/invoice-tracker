@@ -17,7 +17,7 @@
     "@vee-validate/zod": "^4.12.7",
     "@vueuse/core": "^10.11.0",
     "autoprefixer": "^10.4.20",
-    "nuxt": "^3.12.3",
+    "nuxt": "^3.21.11",
     "nuxt-security": "^2.5.1",
     "pinia": "^2.1.7",
     "postcss": "^8.4.47",
@@ -33,7 +33,7 @@
     "@vitejs/plugin-vue": "^6.0.0",
     "@vitest/coverage-v8": "^3.0.0",
     "@vue/test-utils": "^2.4.6",
-    "happy-dom": "^14.0.0",
+    "happy-dom": "^20.14.0",
     "typescript": "^5.5.4",
     "vitest": "^3.0.0",
     "vue-tsc": "^3.1.2"
