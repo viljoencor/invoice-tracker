@@ -10,7 +10,7 @@ permissions:
   contents: read
   security-events: write
   pull-requests: read
-  packages: write   # required for GHCR push in the publish job
+  packages: write # required for GHCR push in the publish job
 
 env:
   PYTHON_VERSION: "3.12"
@@ -18,24 +18,28 @@ env:
   REGISTRY: ghcr.io
 
 # ============================================================================
-# A. Backend quality — ALL gates are blocking
+# A. Backend quality - ALL gates are blocking
 # ============================================================================
 jobs:
   backend-quality:
     name: Backend Quality
     runs-on: ubuntu-latest
+
     defaults:
       run:
         working-directory: apps/backend
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - uses: astral-sh/setup-uv@v3
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v3
 
       - name: Install dependencies (incl. dev)
         run: uv sync --all-extras --dev
@@ -47,7 +51,6 @@ jobs:
         run: uv run ruff format --check app tests
 
       - name: Type check (MyPy)
-        # continue-on-error removed — type errors now block the pipeline
         run: uv run mypy app
 
       - name: Security scan (Bandit)
@@ -57,8 +60,6 @@ jobs:
         env:
           JWT_SECRET: _Bk2swV-irvgVGswT169WWh4ty2DFVgvTS9q3_KtlHo
           ENVIRONMENT: development
-        # --cov-fail-under=50 is set in pyproject.toml addopts; exit non-zero
-        # if coverage drops below the threshold.
         run: uv run pytest --cov --cov-report=xml --cov-report=term
 
       - name: Upload backend coverage artifact
@@ -73,22 +74,25 @@ jobs:
         with:
           file: apps/backend/coverage.xml
           flags: backend
-          fail_ci_if_error: false  # advisory — external service availability
+          fail_ci_if_error: false
 
   # ============================================================================
-  # B. Frontend quality — ALL gates are blocking
+  # B. Frontend quality - ALL gates are blocking
   # ============================================================================
   frontend-quality:
     name: Frontend Quality
     runs-on: ubuntu-latest
+
     defaults:
       run:
         working-directory: apps/frontend
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -98,19 +102,17 @@ jobs:
         run: npm ci
 
       - name: Dependency vulnerability scan (npm audit)
-        # Blocks on fixable high/critical vulnerabilities in production dependencies;
-        # dev-only tooling vulnerabilities are audited separately and don't block.
+        # Blocks on HIGH/CRITICAL vulnerabilities in production dependencies.
+        # Development-only dependencies are excluded.
         run: npm audit --omit=dev --audit-level=high
 
       - name: Generate Nuxt type stubs
         run: npx nuxt prepare
 
       - name: Type check (vue-tsc)
-        # continue-on-error removed — type errors block the pipeline
         run: npm run typecheck
 
       - name: Unit tests with coverage
-        # vitest.config.ts defines thresholds; exits non-zero if they are not met
         run: npm run test:coverage
 
       - name: Upload frontend coverage artifact
@@ -125,23 +127,26 @@ jobs:
         with:
           directory: apps/frontend/coverage/
           flags: frontend
-          fail_ci_if_error: false  # advisory
+          fail_ci_if_error: false
 
       - name: Production build
-        # Validates that the app can build without NUXT_API_BASE because it is
-        # a runtime-only private config — it is never baked into the bundle.
+        # NUXT_API_BASE is runtime-only private config and is not baked
+        # into the application bundle.
         run: npm run build
 
   # ============================================================================
-  # C + D. Integration & E2E — compose starts in this job
+  # C + D. Integration & E2E
   # ============================================================================
   integration:
     name: Integration & E2E
     runs-on: ubuntu-latest
-    needs: [backend-quality, frontend-quality]
+    needs:
+      - backend-quality
+      - frontend-quality
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -150,23 +155,30 @@ jobs:
         working-directory: infra
         run: docker compose up --build -d
 
-      # C. Poll backend readiness — no fixed sleep
+      # ------------------------------------------------------------------------
+      # Poll backend readiness - no fixed sleep
+      # ------------------------------------------------------------------------
       - name: Wait for backend readiness
         run: |
-          echo "Polling http://localhost:8000/healthz (max 120 s) …"
+          echo "Polling http://localhost:8000/healthz (max 120 s)..."
+
           for i in $(seq 1 60); do
             if curl -sf http://localhost:8000/healthz > /dev/null 2>&1; then
-              echo "✓ Backend ready after $((i * 2)) s"
+              echo "Backend ready after $((i * 2)) s"
               break
             fi
+
             if [ "$i" -eq 60 ]; then
-              echo "✗ Backend did not become ready within 120 s"
+              echo "Backend did not become ready within 120 s"
               exit 1
             fi
+
             sleep 2
           done
 
-      # F. Migrations — run before the app handles requests; idempotent via Alembic
+      # ------------------------------------------------------------------------
+      # Database migrations
+      # ------------------------------------------------------------------------
       - name: Run database migrations (upgrade head)
         working-directory: infra
         run: docker compose exec -T backend alembic upgrade head
@@ -181,23 +193,29 @@ jobs:
         working-directory: infra
         run: docker compose exec -T backend python -m app.scripts.seed
 
-      # C. Poll frontend readiness
+      # ------------------------------------------------------------------------
+      # Poll frontend readiness
+      # ------------------------------------------------------------------------
       - name: Wait for frontend readiness
         run: |
-          echo "Polling http://localhost:3000 (max 120 s) …"
+          echo "Polling http://localhost:3000 (max 120 s)..."
+
           for i in $(seq 1 60); do
             if curl -sf http://localhost:3000 > /dev/null 2>&1; then
-              echo "✓ Frontend ready after $((i * 2)) s"
+              echo "Frontend ready after $((i * 2)) s"
               break
             fi
+
             if [ "$i" -eq 60 ]; then
-              echo "✗ Frontend did not become ready within 120 s"
+              echo "Frontend did not become ready within 120 s"
               exit 1
             fi
+
             sleep 2
           done
 
-      - uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -211,7 +229,9 @@ jobs:
         working-directory: apps/frontend
         run: npx playwright install --with-deps chromium
 
-      # D. E2E in the same job — admin123 is the seed script's hardcoded test password
+      # ------------------------------------------------------------------------
+      # E2E tests
+      # ------------------------------------------------------------------------
       - name: Run E2E tests
         working-directory: apps/frontend
         env:
@@ -230,7 +250,9 @@ jobs:
             apps/frontend/playwright-report/
           retention-days: 7
 
-      # Always collect logs so failures are debuggable
+      # ------------------------------------------------------------------------
+      # Diagnostics
+      # ------------------------------------------------------------------------
       - name: Collect service logs
         if: always()
         working-directory: infra
@@ -250,50 +272,77 @@ jobs:
         run: docker compose down -v
 
   # ============================================================================
-  # Security — filesystem SCA scan (SARIF upload advisory; scan exit-code blocking)
+  # Security - filesystem SCA scan
+  #
+  # Advisory only.
+  #
+  # Production container vulnerability enforcement happens later against the
+  # actual backend and frontend images.
   # ============================================================================
   security-scan:
     name: Security Scan (filesystem)
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+      - name: Generate filesystem Trivy SARIF
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
           format: sarif
           output: trivy-results.sarif
-          exit-code: '0'
+
+          # Vulnerability scanning only.
+          scanners: vuln
+
+          # Report critical vulnerabilities.
           severity: CRITICAL
+
+          # Do not report vulnerabilities for which upstream provides
+          # no remediation yet.
           ignore-unfixed: true
 
-      - name: Upload Trivy SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+          # SARIF normally includes all severities unless this is enabled.
+          limit-severities-for-sarif: true
+
+          # Advisory scan - never blocks CI.
+          exit-code: "0"
+
+      - name: Upload filesystem Trivy SARIF to GitHub Security
         if: always()
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
-        continue-on-error: true  # advisory — external service availability
+          category: trivy-filesystem
+        continue-on-error: true
 
   # ============================================================================
-  # E. Build & publish immutable production images (main/master only)
+  # E. Build & publish immutable production images
+  #
+  # main/master only
   # ============================================================================
   publish:
     name: Build & Publish Images
     runs-on: ubuntu-latest
-    needs: [integration]
+
+    needs:
+      - integration
+
     if: >
       github.event_name == 'push' &&
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
     permissions:
       contents: read
       packages: write
       security-events: write
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -305,17 +354,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Resolve image names (lower-case owner required by GHCR)
+      # ------------------------------------------------------------------------
+      # Resolve image names
+      #
+      # GHCR repository owner must be lower-case.
+      # ------------------------------------------------------------------------
       - name: Compute image names
         id: names
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+
           echo "backend=${REGISTRY}/${OWNER}/invoice-tracker-backend" >> "$GITHUB_OUTPUT"
           echo "frontend=${REGISTRY}/${OWNER}/invoice-tracker-frontend" >> "$GITHUB_OUTPUT"
         env:
           REGISTRY: ${{ env.REGISTRY }}
 
-      - name: Docker metadata — backend
+      # ------------------------------------------------------------------------
+      # Docker metadata - backend
+      # ------------------------------------------------------------------------
+      - name: Docker metadata - backend
         id: meta-backend
         uses: docker/metadata-action@v5
         with:
@@ -324,7 +381,10 @@ jobs:
             type=sha,prefix=sha-,format=short
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Docker metadata — frontend
+      # ------------------------------------------------------------------------
+      # Docker metadata - frontend
+      # ------------------------------------------------------------------------
+      - name: Docker metadata - frontend
         id: meta-frontend
         uses: docker/metadata-action@v5
         with:
@@ -333,7 +393,15 @@ jobs:
             type=sha,prefix=sha-,format=short
             type=raw,value=latest,enable={{is_default_branch}}
 
-      # Build and push production backend image with SBOM + provenance attestations
+      # ------------------------------------------------------------------------
+      # Build and push production backend image
+      #
+      # Includes:
+      #   - OCI provenance
+      #   - SBOM
+      #   - immutable SHA tag
+      #   - latest tag on default branch
+      # ------------------------------------------------------------------------
       - name: Build and push backend image
         id: push-backend
         uses: docker/build-push-action@v5
@@ -348,7 +416,9 @@ jobs:
           provenance: true
           sbom: true
 
+      # ------------------------------------------------------------------------
       # Build and push production frontend image
+      # ------------------------------------------------------------------------
       - name: Build and push frontend image
         id: push-frontend
         uses: docker/build-push-action@v5
@@ -363,40 +433,138 @@ jobs:
           provenance: true
           sbom: true
 
-      # E. Scan the final published images — not the source filesystem
-      - name: Scan backend image (Trivy)
-        uses: aquasecurity/trivy-action@master
+      # ========================================================================
+      # Trivy SARIF reporting
+      #
+      # These scans generate GitHub Security reports but DO NOT fail the job.
+      #
+      # Security enforcement is performed by separate table-format scans below.
+      # ========================================================================
+
+      # ------------------------------------------------------------------------
+      # Backend SARIF report
+      # ------------------------------------------------------------------------
+      - name: Generate backend Trivy SARIF
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
+          scan-type: image
           image-ref: >-
             ${{ steps.names.outputs.backend }}@${{ steps.push-backend.outputs.digest }}
+
           format: sarif
           output: trivy-backend.sarif
-          exit-code: '1'
+
+          scanners: vuln
+
           severity: CRITICAL
+
           ignore-unfixed: true
 
-      - name: Scan frontend image (Trivy)
-        uses: aquasecurity/trivy-action@master
+          # Important:
+          # without this option SARIF output can include all severities.
+          limit-severities-for-sarif: true
+
+          # Reporting only.
+          exit-code: "0"
+
+      # ------------------------------------------------------------------------
+      # Frontend SARIF report
+      # ------------------------------------------------------------------------
+      - name: Generate frontend Trivy SARIF
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
+          scan-type: image
           image-ref: >-
             ${{ steps.names.outputs.frontend }}@${{ steps.push-frontend.outputs.digest }}
+
           format: sarif
           output: trivy-frontend.sarif
-          exit-code: '1'
+
+          scanners: vuln
+
           severity: CRITICAL
+
           ignore-unfixed: true
 
-      - name: Upload image scan SARIF results
-        uses: github/codeql-action/upload-sarif@v3
+          limit-severities-for-sarif: true
+
+          # Reporting only.
+          exit-code: "0"
+
+      # ========================================================================
+      # Upload image SARIF reports
+      # ========================================================================
+
+      - name: Upload backend Trivy SARIF
         if: always()
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-backend.sarif
-        continue-on-error: true  # advisory
+          category: trivy-backend-image
+        continue-on-error: true
 
-      - name: Upload frontend scan SARIF results
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Upload frontend Trivy SARIF
         if: always()
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-frontend.sarif
-        continue-on-error: true  # advisory
+          category: trivy-frontend-image
+        continue-on-error: true
 
+      # ========================================================================
+      # Blocking production image security gates
+      #
+      # Policy:
+      #
+      #   - vulnerability scanner only
+      #   - CRITICAL vulnerabilities only
+      #   - ignore vulnerabilities without an upstream fix
+      #   - fail with exit code 1 when a matching vulnerability exists
+      #
+      # Table format is intentional because it prints the exact package,
+      # CVE, installed version and fixed version directly in Actions logs.
+      # ========================================================================
+
+      # ------------------------------------------------------------------------
+      # Backend blocking gate
+      # ------------------------------------------------------------------------
+      - name: Enforce backend CRITICAL vulnerability gate
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: >-
+            ${{ steps.names.outputs.backend }}@${{ steps.push-backend.outputs.digest }}
+
+          format: table
+
+          scanners: vuln
+
+          severity: CRITICAL
+
+          ignore-unfixed: true
+
+          exit-code: "1"
+
+      # ------------------------------------------------------------------------
+      # Frontend blocking gate
+      #
+      # always() ensures that if the backend has a vulnerability we still get
+      # the frontend result during the same pipeline execution.
+      # ------------------------------------------------------------------------
+      - name: Enforce frontend CRITICAL vulnerability gate
+        if: always()
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: >-
+            ${{ steps.names.outputs.frontend }}@${{ steps.push-frontend.outputs.digest }}
+
+          format: table
+
+          scanners: vuln
+
+          severity: CRITICAL
+
+          ignore-unfixed: true
+
+          exit-code: "1"
