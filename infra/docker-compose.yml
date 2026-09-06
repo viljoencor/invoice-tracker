@@ -1,73 +1,114 @@
 services:
   db:
     image: postgres:16
+
     environment:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: invoicer
+
     ports:
       - "5432:5432"
+
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U postgres -d invoicer"
+        ]
       interval: 5s
       timeout: 5s
       retries: 20
       start_period: 10s
+
     volumes:
       - dbdata:/var/lib/postgresql/data
+
     restart: unless-stopped
+
 
   backend:
     build:
       context: ../apps/backend
       target: development
+
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/invoicer
       ENVIRONMENT: development
+
       JWT_SECRET: _Bk2swV-irvgVGswT169WWh4ty2DFVgvTS9q3_KtlHo
+
       ACCESS_TOKEN_EXPIRE_MINUTES: 60
       REFRESH_TOKEN_EXPIRE_MINUTES: 1440
+
       DB_POOL_SIZE: 20
       DB_MAX_OVERFLOW: 10
       DB_POOL_RECYCLE: 3600
+
       RATE_LIMIT_ENABLED: true
       RATE_LIMIT_PER_MINUTE: 60
+
       LOG_LEVEL: INFO
       LOG_JSON_FORMAT: false
+
     volumes:
       - ../apps/backend/migrations:/app/migrations
       - ../apps/backend/app:/app/app
+
     depends_on:
       db:
         condition: service_healthy
+
     ports:
       - "8000:8000"
+
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=5)"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
     restart: unless-stopped
+
 
   frontend:
     build:
       context: ../apps/frontend
       target: development
+
     environment:
       NUXT_API_BASE: http://backend:8000/api/v1
       NODE_ENV: development
+
     depends_on:
       backend:
         condition: service_healthy
+
     ports:
       - "3000:3000"
+
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+      test:
+        [
+          "CMD",
+          "wget",
+          "--spider",
+          "-q",
+          "http://localhost:3000"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     restart: unless-stopped
+
 
 volumes:
   dbdata:
